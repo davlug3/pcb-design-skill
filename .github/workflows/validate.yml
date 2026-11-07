@@ -31,8 +31,8 @@ jobs:
     name: Structural checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
       - name: Validate boards with check_pcb.py
@@ -54,7 +54,7 @@ jobs:
     name: KiCad 9 DRC
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Pull KiCad CLI image
         run: docker pull kicad/kicad:9.0
       - name: Show KiCad version
@@ -70,6 +70,9 @@ jobs:
           fi
 
           mkdir -p drc
+          # The KiCad image runs as the unprivileged "kicad" user; make the
+          # report directory writable so it can save the .rpt files.
+          chmod 0777 drc
           status=0
           for board in "${boards[@]}"; do
             name=$(basename "${board}" .kicad_pcb)
@@ -115,7 +118,7 @@ jobs:
           exit "${status}"
       - name: Upload DRC reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kicad-drc-reports
           path: drc/
