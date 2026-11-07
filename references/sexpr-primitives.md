@@ -1,26 +1,26 @@
-# KiCad S-Expression Primitives for PCB Design — distilled reference
+# KiCad S-Expression Primitives (PCB) — KiCad 8/9 reference
 
-Source: https://dev-docs.kicad.org/en/file-formats/sexpr-intro/index.html (primary). Board-specific usage: https://dev-docs.kicad.org/en/file-formats/sexpr-pcb/index.html.
+Source: https://dev-docs.kicad.org/en/file-formats/sexpr-intro/index.html (common syntax), https://dev-docs.kicad.org/en/file-formats/sexpr-pcb/index.html (board context). Verified against KiCad 9.0 output, 2026-11.
 
-Use this as a quick reference when generating `.kicad_pcb` content. Verify against the docs for uncertain attributes.
+Use `references/pcb-file-format.md` for section-level layout and `assets/*.kicad_pcb` for complete, validator-clean examples.
 
 ## Syntax rules
 
-- S-expressions delimited by `(` and `)`.
-- Tokens are lowercase.
-- Tokens cannot contain whitespace or special characters other than `_`.
-- Strings are double-quoted and UTF-8.
-- Attributes may be required, optional (`[ ... ]` in docs), or chosen from alternatives (`a | b`).
-- Human readability is a goal.
+- S-expressions use `(` and `)`. Tokens are lowercase.
+- **v7+ output quotes strings**, including layer names and net names: `(layer "F.Cu")`, `(net 1 "+5V")`. Older files may use bare tokens; do not emulate that in new files. (`generator` is commonly still a bare token in v7 output.)
+- Tokens cannot contain whitespace or special characters other than `_`; canonical layer names contain `.` and are therefore written as quoted strings.
+- Tokens may be required, optional (`[ ... ]`), or one of alternatives (`a | b`).
+- Comments are not part of the format; do not rely on `;`.
+- Human-readable indentation is expected but not semantic.
 
 ## Coordinates, sizes, angles
 
-- **All values are in millimeters.**
-- Avoid exponential floating-point notation for readability.
-- Coordinates are relative to the origin of their containing object.
-- Board/footprint files: minimum internal unit is 1 nm (max 6 decimal places, `0.000001` mm); extra precision may be truncated.
-- Position: `(at X Y [ANGLE])`. Some objects omit angle.
-- **Angle note from docs:** Symbol `text` angles are stored in tenths of a degree; all other angles are stored in degrees. Follow the object-specific rule.
+- All values are millimeters.
+- PCB/footprint internal resolution is 1 nm: at most 6 decimal places (`0.000001` mm). Extra precision is truncated.
+- Avoid exponential notation.
+- Coordinates are relative to the containing object: board graphics are absolute; footprint graphics/pads are relative to the footprint origin.
+- Position: `(at X Y [ANGLE])`, angle in **degrees** for PCB/footprint objects. (Symbol `text` angles are tenths of a degree — a schematic-only quirk.)
+- Board origin is top-left; +X right, +Y down. Negative coordinates are legal but unusual.
 
 ## Points
 
@@ -28,114 +28,193 @@ Use this as a quick reference when generating `.kicad_pcb` content. Verify again
 (pts (xy X Y) (xy X Y) ...)
 ```
 
-## Stroke (outlines)
+Minimum 3 points for a zone/polygon outline; 2+ for a polyline.
+
+## Stroke
 
 ```lisp
 (stroke (width W) (type TYPE) (color R G B A))
 ```
 
-`TYPE` values include `dash`, `dash_dot`, `dash_dot_dot` (v7+), `dot`, `default`, `solid`.
+- v7+ graphics use `stroke`; pre-v7 used `(width W)`.
+- `TYPE`: `default`, `solid`, `dash`, `dot`, `dash_dot`, `dash_dot_dot` (v7+).
+- `color` is optional RGBA (0–255); usually omitted.
 
 ## Text effects
 
 ```lisp
 (effects
-  (font [(face FACE_NAME)] (size H W) [(thickness T)] [bold] [italic] [(line_spacing R)])
+  (font [(face "FAMILY")] (size HEIGHT WIDTH) [(thickness T)] [bold] [italic])
   [(justify [left|right] [top|bottom] [mirror])]
-  [hide]
+  [(hide yes)]
 )
 ```
 
-`mirror` is supported in PCB/footprints context per docs.
+- v8+ writes `(hide yes)`; older files may use bare `hide`.
+- `mirror` is only valid in PCB/footprint context.
+- Reference/value fonts are commonly 1.0 mm high, 0.15 mm thick; silkscreen text should stay ≥0.8–1.0 mm high.
 
-## Canonical layers (board/footprint)
+## Canonical layers
 
-Drawable objects use `(layer ...)`. User renames are display/output only; internal names are canonical. Wildcards like `*.Cu` can represent matching layers where allowed.
+Drawable objects use `(layer "NAME")`. Internal names are canonical; user renames are display-only.
 
-Common canonical names:
-- Copper: `F.Cu`, `In1.Cu`..`In30.Cu`, `B.Cu`
-- Tech: `F.Adhes`, `B.Adhes`, `F.Paste`, `B.Paste`, `F.SilkS`, `B.SilkS`, `F.Mask`, `B.Mask`, `F.CrtYd`, `B.CrtYd`, `F.Fab`, `B.Fab`
-- User/mechanical: `Dwgs.User`, `Cmts.User`, `Eco1.User`, `Eco2.User`, `Edge.Cuts`, `Margin` (per docs context), `User.1`..`User.9`
+- Copper: `F.Cu`, `In1.Cu`…`In30.Cu`, `B.Cu`
+- Technical: `F.Adhes`, `B.Adhes`, `F.Paste`, `B.Paste`, `F.SilkS`, `B.SilkS`, `F.Mask`, `B.Mask`, `F.CrtYd`, `B.CrtYd`, `F.Fab`, `B.Fab`
+- User: `Dwgs.User`, `Cmts.User`, `Eco1.User`, `Eco2.User`, `Edge.Cuts`, `Margin`, `User.1`…`User.9`
+- Wildcards such as `*.Cu` and `*.Mask` are allowed in pad `layers` lists.
 
-**Board outline:** use `Edge.Cuts` with a closed contour.
+Use `Edge.Cuts` for the board boundary; `F.CrtYd`/`B.CrtYd` for courtyards; `F.Fab` for assembly body outlines.
 
 ## Unique identifiers
 
 ```lisp
-(uuid UUID)   ; RFC4122-like UUID; KiCad uses version 4 (random) in general; legacy conversions may differ
+(uuid "8f14e45f-ea2d-4b7e-9c1a-3b5d6e7f8091")
 ```
 
-Board tracks use `(tstamp UUID)` in the board format docs; footprints/pads/graphics may use `(uuid UUID)` as specified by each token. Use unique values consistently.
+- Version 4 (random) UUID strings, unique within the file.
+- v8/9 use `(uuid ...)` for footprints, pads, graphics, tracks, vias, zones and groups.
+- v6 and v7 used `(tstamp ...)` for tracks, vias, zones and graphics. Do not mix.
+- Groups use `(id UUID)` plus `(members UUID...)`.
 
 ## Footprints (board context)
 
-A footprint placed on a board is a `(footprint ...)` definition (see intro docs). Key elements:
-- Identification/library context and placement: `(layer ...)`, `(at X Y [rot])`, `(uuid ...)` for board instances.
-- `(fp_text reference ...)`, `(fp_text value ...)` on appropriate layers (often silkscreen/fab as needed).
-- Footprint graphics (`fp_line`, `fp_rect`, `fp_circle`, `fp_arc`, `fp_poly`, `fp_curve`, etc.).
-- `(pad ...)` definitions with number, type, shape, position, size, drill (for THT), layers, and optional `(net N "name")`.
-- Optional courtyard/fab/silkscreen/mask geometry.
-
-## Pads (essentials)
-
 ```lisp
-(pad "NUMBER" TYPE SHAPE (at X Y [rot]) (size W H)
-  [(drill [oval] D [W] [(offset X Y)])]
-  (layers LAYER_LIST)
-  [(roundrect_rratio R)]
-  (net N "NAME")
-  (uuid UUID)
-  [...options...])
+(footprint "LIB:ENTRY"
+  (layer "F.Cu")
+  (uuid "...")
+  (at X Y [ROT])
+  (descr "...")
+  (tags "...")
+  (property "Reference" "R1" (at X Y [ROT]) (layer "F.SilkS") (uuid "...") (effects ...))
+  (property "Value" "10k"   (at X Y [ROT]) (layer "F.Fab")   (uuid "...") (effects ...))
+  (property "Datasheet" ""  (at 0 0 0) (unlocked yes) (layer "F.Fab") (hide yes) (uuid "...") (effects ...))
+  (attr smd|through_hole [board_only] [exclude_from_pos_files] [exclude_from_bom])
+  (fp_line ...) (fp_rect ...) (fp_circle ...) (fp_arc ...) (fp_poly ...) (fp_curve ...)
+  (fp_text user "..." (at X Y [ROT]) (layer "F.Fab") (uuid "...") (effects ...))
+  (pad ...) ...
+  (zone ...)                         ; footprint-local keepouts
+  (embedded_fonts no)                ; v9
+  (model "..." (offset (xyz 0 0 0)) (scale (xyz 1 1 1)) (rotate (xyz 0 0 0)))
+)
 ```
 
+- `property` fields replace `(fp_text reference ...)`/`(fp_text value ...)` in v8/v9. `fp_text user` is still used for free text.
+- Footprint graphics (`fp_*`) are not valid outside a footprint.
+- `path` links to a schematic sheet/symbol. `board_only` marks footprints with no schematic counterpart.
+- `attr through_hole` for THT, `attr smd` for SMD, `attr board_only` for mechanical parts.
+
+## Pads
+
+```lisp
+(pad "NUMBER" TYPE SHAPE (at X Y [ROT]) (size W H)
+  [(drill [oval] D [W] [(offset X Y)])]
+  (layers "LAYER" ...)
+  [(roundrect_rratio R)]
+  [(chamfer_ratio R)] [(chamfer CORNER ...)]
+  [(property pad_prop_*)]
+  [(remove_unused_layers no)] [(keep_end_layers)]
+  (net N "NAME")
+  [(pinfunction "NAME")] [(pintype "TYPE")]
+  (uuid "...")
+  [(solder_mask_margin M)] [(solder_paste_margin M)] [(solder_paste_margin_ratio R)]
+  [(clearance C)] [(zone_connect 0|1|2|3)] [(thermal_width W)] [(thermal_gap G)]
+  [(options (clearance outline|convexhull) (anchor rect|circle))]
+  [(primitives ...)]
+)
+```
+
+- `NUMBER` is a quoted string; mechanical pads may be `"0"` or `""`.
 - `TYPE`: `thru_hole`, `smd`, `connect`, `np_thru_hole`.
 - `SHAPE`: `circle`, `rect`, `oval`, `trapezoid`, `roundrect`, `custom`.
-- `layers`: e.g., `*.Cu *.Mask F.SilkS` for THT, or `F.Cu F.Paste F.Mask` for SMD (choose appropriately).
-- Include drill for through-hole/NPTH as required.
+- THT/NPTH need `drill`; SMD must not have one.
+- THT layers: `"*.Cu" "*.Mask"`; SMD: `"F.Cu" "F.Paste" "F.Mask"` (or `B.*`).
+- `roundrect_rratio` 0–1 (0.25 is a common SMD value).
+- Custom pads use `options` + `primitives` containing `gr_line`/`gr_poly`/etc.; those inner graphics use `(width ...)` and `(fill yes)` — this is the one place where `width` is still correct in v9.
+- Pad `net` name must match the board net table.
 
-## Board graphics
+## Pad drill
 
 ```lisp
-(gr_line (start X Y) (end X Y) (layer Edge.Cuts) (width 0.15) (uuid ...))
-(gr_arc (start X Y) (mid X Y) (end X Y) (layer Edge.Cuts) (width 0.15) (uuid ...))
-(gr_rect (start X Y) (end X Y) (layer F.SilkS) (width 0.12) (uuid ...))
-(gr_circle (center X Y) (end X Y) (layer F.SilkS) (width 0.12) (uuid ...))
-(gr_poly (pts (xy ...) ...) (layer F.SilkS) (width 0.12) [(fill yes)] (uuid ...))
-(gr_text "TEXT" (at X Y [rot]) (layer F.SilkS) (uuid ...) (effects ...))
+(drill 0.8)                       ; round
+(drill oval 0.8 1.6)              ; slotted
+(drill 0.8 (offset 0.2 0))        ; offset from pad center
 ```
 
-Use `Edge.Cuts` for the board boundary. Keep widths sensible for fabrication/visibility.
+## Board graphics (`gr_*`)
 
-## Zones (essentials)
+```lisp
+(gr_line (start 0 0) (end 30 0) (stroke (width 0.1) (type solid)) (layer "Edge.Cuts") (uuid "..."))
+(gr_rect (start 0 0) (end 30 20) (stroke (width 0.1) (type solid)) (fill no) (layer "F.SilkS") (uuid "..."))
+(gr_circle (center 15 10) (end 16 10) (stroke (width 0.12) (type solid)) (layer "F.SilkS") (uuid "..."))
+(gr_arc (start 0 0) (mid 5 5) (end 10 0) (stroke (width 0.1) (type solid)) (layer "Edge.Cuts") (uuid "..."))
+(gr_poly (pts (xy 0 0) (xy 5 0) (xy 5 5)) (stroke (width 0.1) (type solid)) (fill yes) (layer "F.SilkS") (uuid "..."))
+(gr_text "TEXT" (at X Y [ROT]) (layer "F.SilkS") (uuid "...") (effects ...))
+(gr_text_box "TEXT" (start X Y) (end X Y) (layer "F.SilkS") (uuid "...") (effects ...) [(stroke ...)])
+```
+
+- `Edge.Cuts` outline must be closed. A `gr_rect`, `gr_circle` or closed `gr_poly` counts as closed on its own.
+- Use sensible widths: outline 0.05–0.15 mm, silk 0.12–0.15 mm, courtyard 0.05 mm.
+
+## Zones
 
 ```lisp
 (zone
   (net N) (net_name "NAME")
-  (layer F.Cu|B.Cu|...)
-  (uuid UUID)
-  [(name "ZONE_NAME")]
+  (layer "F.Cu")
+  (uuid "...")
+  [(name "ZONE")]
   (hatch none|edge|full PITCH)
   [(priority P)]
-  (connect_pads [thru_hole_only|full|no] (clearance C))
+  (connect_pads [yes|no|thru_hole_only] (clearance C))
   (min_thickness T)
   [(filled_areas_thickness no)]
-  (fill yes [(mode hatched)] (thermal_gap G) (thermal_bridge_width W) ...)
+  (fill yes [(mode hatched)] (thermal_gap G) (thermal_bridge_width W)
+        [(smoothing chamfer|fillet)] [(radius R)]
+        [(island_removal_mode 0|1|2)] [(island_area_min A)])
   (polygon (pts (xy X Y) ...))
+  [(filled_polygon (layer "F.Cu") (pts ...)) ...]
 )
 ```
 
-- Keepout zones add `(keepout (tracks ...)(vias ...)(pads ...)(copperpour ...)(footprints ...))`.
-- Omit `net_name` semantics per keepout rules in docs (keepouts are not tied to a net in the usual way).
+- `hatch` is display-only.
+- `connect_pads`: `yes` (solid), `no` (disconnected) or `thru_hole_only` (THT pads solid, SMD thermal); with no mode keyword, thermal relief is the default.
+- `fill yes` is intent; `filled_polygon` only exists after a refill.
+- Keepouts add a `keepout` block:
+
+```lisp
+(keepout
+  (tracks allowed|not_allowed) (vias allowed|not_allowed) (pads allowed|not_allowed)
+  (copperpour allowed|not_allowed) (footprints allowed|not_allowed))
+```
+
+Keepouts use `(net 0)` and `(net_name "")`.
 
 ## Groups
 
 ```lisp
-(group "NAME" (id UUID) (members UUID1 ... UUIDN))
+(group "NAME" (id "UUID") (members "UUID1" "UUID2" ...))
 ```
+
+## Version-sensitive token summary
+
+| Feature | KiCad 6 | KiCad 7 | KiCad 8/9 |
+|---------|---------|---------|-----------|
+| Track/via/zone ID | `(tstamp ...)` | `(tstamp ...)` | `(uuid ...)` |
+| Graphic outline | `(width W)` | `(stroke (width W) (type T))` | `(stroke ...)` |
+| Hide text | bare `hide` | bare `hide` | `(hide yes)` |
+| Footprint fields | `(fp_text reference ...)` | `(fp_text reference ...)` | `(property "Reference" ...)` |
+| String quoting | minimal | quoted | quoted |
+| Layer ordinals | historical IDs | historical IDs | new scheme (9.0) |
+| Font face | — | `(face "...")` | `(face "...")` |
+| Text boxes | — | `gr_text_box` / `fp_text_box` | yes |
+| Board-level fonts | — | — | `(embedded_fonts no)` (9) |
+| Soldermask bridges | — | — | `(allow_soldermask_bridges_in_footprints no)` (8+) |
+| Tenting | — | — | `(tenting front back)` (9) |
 
 ## Practical generation tips
 
-- Generate complete, balanced s-expressions; pretty-print indentation for readability.
-- Use consistent UUIDs (unique per object). If you don't have a UUID generator, produce well-formed unique UUID v4-style strings and keep them stable within the file.
-- For simple boards, prefer explicit, minimal tokens that KiCad accepts over copying every optional parameter from old examples.
-- When target KiCad version is unknown, prefer modern, documented structures and state the assumption. Fetch docs for version-sensitive details.
+- Copy `assets/example-led.kicad_pcb` and replace contents rather than writing a header from memory.
+- Keep every numeric field in mm with ≤6 decimals and no exponent.
+- Generate unique UUIDv4 strings; never reuse one.
+- Prefer explicit, minimal tokens that KiCad writes over every optional parameter from old examples.
+- After any edit, run `python3 scripts/check_pcb.py --strict <board>`.

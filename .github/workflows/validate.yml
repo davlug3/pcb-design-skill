@@ -1,0 +1,122 @@
+name: Validate PCB assets
+
+on:
+  push:
+    paths:
+      - "*.kicad_pcb"
+      - "*.kicad_dru"
+      - "**/*.kicad_pcb"
+      - "**/*.kicad_dru"
+      - "scripts/**"
+      - ".github/workflows/validate.yml"
+  pull_request:
+    paths:
+      - "*.kicad_pcb"
+      - "*.kicad_dru"
+      - "**/*.kicad_pcb"
+      - "**/*.kicad_dru"
+      - "scripts/**"
+      - ".github/workflows/validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  structural:
+    name: Structural checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate boards with check_pcb.py
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          boards=(assets/*.kicad_pcb)
+          if [ ${#boards[@]} -eq 0 ]; then
+            echo "No .kicad_pcb files found in assets/" >&2
+            exit 1
+          fi
+          for board in "${boards[@]}"; do
+            echo "::group::check_pcb.py --strict ${board}"
+            python3 scripts/check_pcb.py --strict "${board}"
+            echo "::endgroup::"
+          done
+
+  drc:
+    name: KiCad 9 DRC
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pull KiCad CLI image
+        run: docker pull kicad/kicad:9.0
+      - name: Show KiCad version
+        run: docker run --rm kicad/kicad:9.0 kicad-cli version
+      - name: Run DRC on shipped boards
+        run: |
+          set -uo pipefail
+          shopt -s nullglob
+          boards=(assets/*.kicad_pcb)
+          if [ ${#boards[@]} -eq 0 ]; then
+            echo "No .kicad_pcb files found in assets/" >&2
+            exit 1
+          fi
+
+          mkdir -p drc
+          status=0
+          for board in "${boards[@]}"; do
+            name=$(basename "${board}" .kicad_pcb)
+            echo "::group::kicad-cli pcb drc ${board}"
+
+            # Full report (errors, warnings and exclusions) for the log and artifact.
+            # No --exit-code-violations here: cosmetic warnings should not fail the job.
+            docker run --rm \
+              -v "${PWD}:/work" -w /work \
+              kicad/kicad:9.0 \
+              kicad-cli pcb drc \
+                --severity-all \
+                --units mm \
+                --output "drc/${name}.rpt" \
+                "${board}" || true
+            cat "drc/${name}.rpt" 2>/dev/null || true
+
+            # Gate on error-level violations only.
+            docker run --rm \
+              -v "${PWD}:/work" -w /work \
+              kicad/kicad:9.0 \
+              kicad-cli pcb drc \
+                --severity-error \
+                --exit-code-violations \
+                --units mm \
+                --output "drc/${name}-errors.rpt" \
+                "${board}" || status=$?
+            if [ -f "drc/${name}-errors.rpt" ]; then
+              cat "drc/${name}-errors.rpt"
+            fi
+
+            {
+              echo "## ${board}"
+              echo
+              echo '```text'
+              cat "drc/${name}.rpt" 2>/dev/null || true
+              echo '```'
+              echo
+            } >> "${GITHUB_STEP_SUMMARY}"
+            echo "::endgroup::"
+          done
+
+          exit "${status}"
+      - name: Upload DRC reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: kicad-drc-reports
+          path: drc/
+          if-no-files-found: warn

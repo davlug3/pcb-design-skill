@@ -1,0 +1,22 @@
+(version 1)
+
+# Example KiCad custom design rules (.kicad_dru).
+# Netclass names must exist in the project (.kicad_pro) net settings.
+# Place this file next to the .kicad_pro with the same base name, e.g. board.kicad_dru.
+# Verify in Board Setup > Design Rules > Custom Rules and re-run DRC.
+
+(rule "Power nets: 0.5 mm minimum track width"
+	(constraint track_width (min 0.5mm))
+	(condition "A.NetClass == 'Power'"))
+
+(rule "Power nets: 0.6 mm minimum via diameter"
+	(constraint via_diameter (min 0.6mm))
+	(condition "A.NetClass == 'Power'"))
+
+(rule "High-voltage clearance"
+	(constraint clearance (min 1.5mm))
+	(condition "A.NetClass == 'HV'"))
+
+(rule "Silkscreen text height"
+	(constraint text_height (min 0.8mm))
+	(condition "A.Layer == 'F.SilkS' || A.Layer == 'B.SilkS'"))

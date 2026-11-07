@@ -1,101 +1,169 @@
 ---
-name: pcb-design
-description: Design and generate KiCad printed circuit board (PCB) files. Use when creating `.kicad_pcb` board layouts, placing footprints, routing tracks/vias, defining board outlines, nets, copper zones, or producing KiCad 6+ s-expression PCB output. Grounds decisions in KiCad developer file-format documentation rather than prior model knowledge.
+name: pcb-design-skill
+description: Design and generate manufacturable KiCad printed circuit board (PCB) files (.kicad_pcb). Use when creating or editing PCB layouts, placing footprints, routing tracks and vias, defining board outlines, nets, copper zones or planes, or producing DRC-ready KiCad 8/9 s-expression output and Gerbers. Covers netlist modeling, stackup, DFM/DFA rules, and structural validation.
+license: MIT
 ---
 
-# PCB Design (KiCad)
+# PCB Design (KiCad 8/9)
 
-Create manufacturable, syntactically valid KiCad PCB designs and output them as `.kicad_pcb` s-expression files. **KiCad is the primary framework.** Do not rely on prior knowledge of the KiCad file format—use the KiCad developer documentation as the source of truth.
+Create manufacturable, syntactically valid KiCad PCB files and output them as `.kicad_pcb` s-expression files. **KiCad is the primary framework.** Do not rely on memory for the file format — use the KiCad developer documentation and the shipped, validator-clean assets as the source of truth.
+
+**Target dialect: KiCad 9 (`(version 20241229)`).** KiCad 8 (`20240108`) is supported with the differences listed in `references/pcb-file-format.md#version-dialect-matrix` — notably layer ordinals, which changed again in 9. Never mix dialects: v6/v7-era `(tstamp ...)` or v6 `(width ...)` graphics inside a v8/v9 header are the most common cause of files that fail to load.
+
+## Non-negotiables
+
+1. **One dialect per file.** Header `version`, `generator_version`, track UUIDs, stroke syntax and footprint fields must all match the declared version.
+2. **A board is a complete file, not a snippet.** It must open in KiCad and pass the structural checker below.
+3. **Connectivity is geometric.** A track with the right net number that does not touch a pad or another track is still unrouted.
+4. **No silent electrical guesses.** Pin-to-net mapping, polarity, footprint choice and safety spacing must be stated as assumptions or asked about.
+5. **Do not claim fabrication compliance without verified fab limits.** Manufacturing numbers are stackup- and vendor-specific.
 
 ## Retrieval Sources (use before guessing)
 
 | Resource | URL | Use for |
 |----------|-----|---------|
-| S-Expression intro (common syntax) | https://dev-docs.kicad.org/en/file-formats/sexpr-intro/index.html | Syntax rules, coordinates, layers, stroke/text effects, footprints, pads, graphics, zones, groups |
-| Board file format | https://dev-docs.kicad.org/en/file-formats/sexpr-pcb/index.html | `.kicad_pcb` structure: header, general, page, layers, setup, nets, tracks, zones |
-| Footprint library format | https://dev-docs.kicad.org/en/file-formats/sexpr-footprint/index.html | `.kicad_mod` / footprint definition context |
-| KiCad file formats index | https://dev-docs.kicad.org/en/file-formats/index.html | Related formats (schematic/symbol) when needed |
-| JLCPCB PCB design rules/best practices | https://jlcpcb.com/blog/pcb-design-rules-best-practices | Practical/physical guidance: placement, routing, SI/PI/EMI, impedance, differential pairs, DFM/DFA (verify fab-specific limits) |
+| S-Expression intro (common syntax) | https://dev-docs.kicad.org/en/file-formats/sexpr-intro/index.html | Syntax, quoting, coordinates, layers, footprints, pads, graphics, zones, groups |
+| Board file format | https://dev-docs.kicad.org/en/file-formats/sexpr-pcb/index.html | `.kicad_pcb` top-level sections, header, layers, setup, nets, tracks, zones |
+| Footprint library format | https://dev-docs.kicad.org/en/file-formats/sexpr-footprint/index.html | `.kicad_mod` context and footprint fields |
+| KiCad file formats index | https://dev-docs.kicad.org/en/file-formats/index.html | Schematic/symbol formats when a matching schematic is needed |
+| KiCad DRC documentation | https://docs.kicad.org/9.0/en/pcbnew/pcbnew.html#design-rule-checking | What the real DRC checks and which rules are configurable |
+| KiCad custom design rules | https://docs.kicad.org/9.0/en/pcbnew/pcbnew.html#custom-design-rules | `.kicad_dru` syntax and rule expressions |
+| JLCPCB capabilities | https://jlcpcb.com/capabilities/pcb-capabilities | Current fab limits (verify before use) |
+| IPC-2221 / IPC-2152 | https://www.ipc.org/ | Trace width/current, clearance and creepage fundamentals |
 
-If a token, attribute, layer name, unit, or section order is uncertain, fetch the relevant page. Local distilled references in `./references/` summarize key points from these sources but are not a substitute when details are ambiguous. Manufacturing capability numbers are manufacturer/stackup dependent—do not treat examples as universal.
+The developer docs lag the application in places (they still describe pre-v7 `(width ...)` graphics and `(tstamp ...)` tracks). When the docs and a real file from the target KiCad version disagree, **follow the real file** and note the discrepancy.
 
-## When to Use
+## Local References and Assets
 
-- Generate a new KiCad board file (`.kicad_pcb`) from requirements.
-- Add/edit board outline, layers, nets, footprints, pads, segments, vias, arcs, copper zones, or graphics.
-- Convert a described circuit/layout into KiCad s-expression PCB output.
-- Review or repair a generated `.kicad_pcb` for structural validity and common PCB/layout mistakes.
-- Produce footprint-aware board geometry (pads, courtyards, silkscreen, mask intent) grounded in KiCad syntax.
+| Path | Contents |
+|------|----------|
+| `references/pcb-file-format.md` | Version matrix, sections, layer ordinals, setup/stackup, footprints, pads, tracks, zones, checklist |
+| `references/sexpr-primitives.md` | Token syntax, quoting, strokes, effects, UUIDs, pad/graphic/zone primitives, version-sensitive tokens |
+| `references/practical-rules.md` | Stackup, placement, routing, current/width, SI/PI/EMI, impedance, thermal, mechanical, DFM/DFA, defaults |
+| `assets/minimal-2layer.kicad_pcb` | Validator-clean blank 2-layer board (copy this as a starting point) |
+| `assets/example-led.kicad_pcb` | Validator-clean routed example: THT header, SMD resistor/LED, vias, courtyard, mounting hole |
+| `assets/example.kicad_dru` | Custom-rule examples (netclass width, high-voltage clearance) |
+| `scripts/check_pcb.py` | Dependency-free structural/geometry pre-flight checker |
 
-## Local References
-
-- `./references/pcb-file-format.md` — Board file sections, required tokens, minimal structure, nets/tracks/vias, plot/setup notes. Distilled from KiCad board format docs.
-- `./references/sexpr-primitives.md` — S-expression conventions, coordinates/units, canonical layers, footprints/pads, graphics, zones, groups. Distilled from KiCad s-expression intro docs.
-- `./references/practical-rules.md` — Practical/physical design rules: stackup/placement, trace width/current and spacing intent, return paths, decoupling, SI/PI/EMI, 3W crosstalk guideline, controlled impedance and differential pairs, DFM/DFA checks. Distilled from JLCPCB best-practices article; verify manufacturer-specific limits.
-
-Search within references: `kicad_pcb`, `version`, `generator`, `general`, `layers`, `setup`, `net`, `segment`, `via`, `arc`, `zone`, `footprint`, `pad`, `Edge.Cuts`, `gr_line`, `uuid`, `at`, `pts`, `decoupling`, `impedance`, `differential`, `3W`, `return path`, `DFM`, `trace width`.
+Use the search terms in these references before fetching a whole doc page: `version`, `generator_version`, `layers`, `stackup`, `setup`, `net`, `footprint`, `property`, `attr`, `pad`, `stroke`, `segment`, `via`, `zone`, `keepout`, `filled_polygon`, `Edge.Cuts`, `embedded_fonts`, `remove_unused_layers`, `courtyard`, `impedance`, `differential`, `3W`, `return path`, `DFM`, `trace width`.
 
 ## Workflow
 
 1. **Clarify design intent (do not guess silently on critical constraints).**
-   - Board function, components, connectors, power/ground nets, target size/mechanical constraints.
-   - Fabrication assumptions: layer count (default 2-layer unless specified), units (mm), copper weights/stackup details only if relevant.
+   - Board function, components, connectors, power/ground nets, target size and mechanical constraints.
+   - Fabrication assumptions: layer count (default 2), units (mm), copper weight, stackup, surface finish, assembly process.
+   - Target KiCad release. Default to KiCad 9 unless the user says otherwise.
    - If requirements are underspecified, state assumptions explicitly in the response and encode reasonable defaults in the file.
 
 2. **Model the electrical netlist first.**
-   - Assign every copper connection to a net. Define `(net 0 "")` plus named nets before/consistent with items that reference `net` ordinals.
-   - Keep net ordinals stable and unique. Ensure pad/segment/via/zone `net` numbers match the nets section.
+   - Define `(net 0 "")` plus every named net before items reference them. Keep ordinals stable and unique.
+   - Ensure every pad, track, via and zone `net` ordinal exists; ensure pad `(net N "NAME")` names match the net table exactly.
+   - If a matching schematic exists, footprints need `path`/reference links; a board-only design should be marked `board_only` where appropriate.
 
-3. **Define board mechanics and stackup.**
-   - Set board outline on `Edge.Cuts` as a closed shape (typically `gr_line`/`gr_arc` segments forming a loop).
-   - Configure `layers` with canonical names and ordinals appropriate to the design (2-layer minimum: `F.Cu`, `B.Cu` plus masks/silks/`Edge.Cuts`; add inner layers only when specified).
-   - Set `general (thickness ...)` and `setup` values appropriate to the board; avoid inventing obscure plot parameters when not needed.
+3. **Define mechanics, layers and stackup.**
+   - Start from `assets/minimal-2layer.kicad_pcb` and keep its header/layers/setup valid.
+   - Set the `layers` section with canonical names and the correct ordinals (see the table in `references/pcb-file-format.md`; `B.CrtYd`/`F.CrtYd` are not sequential).
+   - Set `(general (thickness 1.6) (legacy_teardrops no))`, `(paper "A4")`, and a realistic `stackup` if stackup matters.
+   - Provide a closed `Edge.Cuts` boundary (lines/arcs or one rect/circle/polygon). Keep copper away from the edge.
 
-4. **Place footprints/components.**
-   - Use valid `footprint` structures with `layer`, `at` (for board placement), `fp_text` reference/value as appropriate, pads, and graphics.
-   - Choose pad types/shapes/layers deliberately (`thru_hole` vs `smd`, drill, size, copper/mask/paste layers).
-   - Place by function: connectors/MCU/power first; group related circuits; separate analog/digital/noisy domains where practical.
-   - Place decoupling capacitors at each IC's power/ground pins with minimal loop area (values/packages per datasheet/PDN intent; state assumptions if unknown).
-   - Respect clearances and courtyard intent; keep reference/value readable where practical.
+4. **Place footprints.**
+   - Use complete embedded footprint definitions: `layer`, `uuid`, `at`, `property` fields (`Reference`/`Value`), `attr smd|through_hole`, pads, silkscreen, `F.CrtYd`/`B.CrtYd` courtyard, and optionally `F.Fab` and a 3D model.
+   - Place by function: connectors, power entry and MCU first; group related circuits; separate analog/digital/noisy domains.
+   - Put decoupling capacitors at each IC power/ground pin with minimal loop area; values/packages per datasheet or stated assumptions.
+   - Respect courtyard and assembly spacing; keep references readable and polarized parts marked.
 
 5. **Route connectivity.**
-   - Use `segment` for copper tracks, `via` for layer transitions, `arc` for curved tracks when appropriate.
-   - Route on correct copper `layer` tokens; set `width` per net class/current intent (power nets wider than signals). For high current or controlled impedance, state assumptions and recommend calculator/stackup verification.
-   - Keep traces short/direct; prefer 45° bends; minimize vias on high-speed paths.
-   - Preserve return paths: avoid routing high-speed/sensitive traces over splits in the reference plane. Consider 3W spacing for parallel/crosstalk-prone runs.
-   - For differential/impedance-controlled nets, only encode geometry that matches a stated stackup/requirement; otherwise flag as requiring impedance design and length matching in KiCad/fab tools.
-   - Ensure every routed item references the correct `net` ordinal.
+   - `segment` for tracks, `via` for layer changes, `arc` for curved tracks. KiCad 8/9 tracks use `(uuid ...)`, not `(tstamp ...)` (v6/7 still used `tstamp`).
+   - Set `width` per item from current/stackup intent; power wider than signals. Net classes live in the project/design-rules file, **not** in `.kicad_pcb`.
+   - Keep tracks short/direct, prefer 45° bends, minimize vias on high-speed paths.
+   - Preserve return paths: do not route high-speed/sensitive traces across plane splits. Apply ~3W spacing for crosstalk-prone parallel runs.
+   - Impedance/differential pairs are stackup + netclass + geometry decisions; only encode geometry that matches a stated stackup. There is no special diff-pair token in the board file.
+   - Verify every segment endpoint actually touches a pad, via or track of the same net.
 
 6. **Add planes/zones when useful.**
-   - Use `zone` for copper pours/keepouts. Define `net`, `net_name`, `layer`, outline `polygon (pts ...)`, and `fill` settings.
-   - Prefer solid reference behavior for PI/SI when layer stackup supports it; keep pours connected with sensible `connect_pads`, `min_thickness`, `thermal_*`, and hatch/fill attributes per docs.
+   - Use `zone` for copper pours and keepouts: `net`, `net_name`, `layer`, `uuid`, `hatch`, `connect_pads`, `min_thickness`, `fill`, and a closed `polygon`.
+   - Keepout zones use `net 0`, an empty `net_name`, and a `keepout` block with `allowed`/`not_allowed` per object type.
+   - `(fill yes ...)` declares intent only; KiCad must **refill zones** before Gerber output. A file without `filled_polygon` is valid but visually/electrically unfilled until refill.
 
-7. **Validate before delivering.**
-   - **Format:** s-expression well-formed (balanced parentheses, quoted strings where required); required board sections present (`kicad_pcb` header with `version`/`generator`, `general`, page/paper, `layers`, `setup`, nets, content).
-   - **Geometry:** units in mm; reasonable coordinates/sizes; canonical layer names; closed `Edge.Cuts` boundary.
-   - **Connectivity:** nets declared; pads/tracks/vias/zones reference valid ordinals.
-   - **Physical/DFM sanity:** trace widths/spacings/drills/annular expectations are plausible for the stated fab process; decoupling placed near IC power pins; no obvious return-path splits under critical routes; polarized/mechanical constraints noted. Do not claim fab compliance without verified manufacturer rules.
-   - **IDs:** `uuid`/`tstamp` present and unique where expected (verify format expectations in docs if unsure).
+7. **Validate before delivering (mandatory).**
+   - Run `python3 scripts/check_pcb.py --strict <board>.kicad_pcb`. It checks syntax, header, nets, layers, UUIDs, pads, tracks, outline closure, zones and dangling endpoints.
+   - If KiCad is installed, run the authoritative DRC and exports:
+     ```bash
+     kicad-cli pcb drc --severity-all --exit-code-violations board.kicad_pcb
+     kicad-cli pcb export gerbers -o gerbers/ board.kicad_pcb
+     kicad-cli pcb export drill -o gerbers/ board.kicad_pcb
+     kicad-cli pcb export pos -o gerbers/ board.kicad_pcb
+     ```
+     Zone refill is a GUI action: open the board and run **Edit → Fill All Zones** before plotting.
+   - If you push the skill repository to GitHub, `.github/workflows/validate.yml` runs `check_pcb.py --strict` and KiCad 9 DRC in CI. CI gates on **error-level** DRC violations so cosmetic silkscreen warnings do not block, and uploads the full `--severity-all` reports as the `kicad-drc-reports` artifact. DRC uses KiCad's built-in constraints unless a `<board>.kicad_pro` is present; ship the project files when the design depends on custom netclasses or rule minimums.
+   - Fix every error and justify or fix every warning. Do not deliver a board that fails `--strict` without saying why.
 
 8. **Output.**
-   - Write the complete file with `.kicad_pcb` extension.
-   - Summarize assumptions (layer count, stackup, copper, current/trace sizing, impedance/diff-pair constraints, fab limits), net list, component/placement notes, and checks to run in KiCad/with the fabricator (ERC intent review, DRC, zone refill, 3D/clearance, impedance/stackup verification, manufacturer DFM/DFA).
+   - Write the complete `.kicad_pcb` file (and `.kicad_dru`/`.kicad_pro` only if rules/netclasses are required).
+   - Summarize assumptions: layer count, stackup, copper weight, current/trace sizing, impedance/diff-pair constraints, fab limits, and what was not verified.
+   - List the checks run and the checks the user still needs (KiCad DRC, zone refill, 3D/clearance, impedance/stackup, fab DFM/DFA).
+
+## Minimal skeleton (KiCad 9)
+
+The full working version is `assets/minimal-2layer.kicad_pcb`. The required shape is:
+
+```lisp
+(kicad_pcb
+  (version 20241229)
+  (generator "your-tool")          ; not "pcbnew" for third-party output
+  (generator_version "1.0")
+  (general (thickness 1.6) (legacy_teardrops no))
+  (paper "A4")
+  (layers (0 "F.Cu" signal) (2 "B.Cu" signal) (25 "Edge.Cuts" user) ...)
+  (setup (pad_to_mask_clearance 0) (pcbplotparams ...))
+  (net 0 "") (net 1 "+5V") (net 2 "GND")
+  (footprint "Package:Name" (layer "F.Cu") (uuid "...") (at 10 10) (attr smd)
+    (property "Reference" "R1" (at 0 -1.5) (layer "F.SilkS") (uuid "...") (effects ...))
+    (pad "1" smd roundrect (at -0.95 0) (size 1 1.45) (layers "F.Cu" "F.Paste" "F.Mask")
+      (roundrect_rratio 0.25) (net 1 "+5V") (uuid "..."))
+    (embedded_fonts no))
+  (segment (start 10 10) (end 20 10) (width 0.3) (layer "F.Cu") (net 1) (uuid "..."))
+  (gr_line (start 0 0) (end 30 0) (stroke (width 0.1) (type solid))
+    (layer "Edge.Cuts") (uuid "..."))
+  (embedded_fonts no)
+)
+```
 
 ## Critical Rules
 
-1. **Docs over priors.** When format details matter, follow https://dev-docs.kicad.org/en/file-formats/sexpr-intro/index.html and https://dev-docs.kicad.org/en/file-formats/sexpr-pcb/index.html.
-2. **Valid structure over partial snippets.** A generated `.kicad_pcb` should be loadable in KiCad as a board file, not just a fragment, unless the user explicitly asks for a fragment.
-3. **Millimeters and canonical tokens.** Use mm values, lowercase tokens, quoted strings as required, and canonical layer names (e.g., `F.Cu`, `B.Cu`, `Edge.Cuts`, `F.SilkS`, `F.Mask`).
-4. **Net integrity.** Net `0` is typically the empty net; all conductive items must reference correct net ordinals.
-5. **Closed board outline.** Provide a manufacturable `Edge.Cuts` boundary.
-6. **No silent electrical guesses.** If pin-to-net mapping, polarity, footprint choice, or safety spacing is unclear, state the assumption or ask.
+1. **Docs plus real files over priors.** Verify version-sensitive syntax against the docs and a file written by the target KiCad release.
+2. **Canonical names and ordinals.** Use `F.Cu`, `B.Cu`, `F.SilkS`, `F.CrtYd`, `Edge.Cuts`, etc., with the ordinals for the file's KiCad version. Quote strings, layer names and net names in v7+ output.
+3. **Net integrity.** Net 0 is the empty net; all conductive items reference declared ordinals; pad net names match the net table.
+4. **Complete footprints.** No board-level `footprint` without `attr`, pads, courtyard and a Reference field.
+5. **Closed outline.** Provide a manufacturable `Edge.Cuts` boundary and keep copper inside it.
+6. **Refill zones.** `(fill yes)` without `filled_polygon` is not a finished pour.
+7. **State the limits.** Never claim DRC/fab compliance you did not verify.
 
 ## Anti-Patterns
 
-- Inventing KiCad tokens/attributes or layer names not supported by the docs.
-- Mixing coordinate units or using non-canonical layer names.
-- Referencing net numbers that do not exist in the `(net ...)` section.
-- Omitting `Edge.Cuts` or leaving an open board outline.
-- Placing pads/tracks without layers, sizes, or required geometry.
-- Relying on memory for exact s-expression shapes when the docs can be checked.
-- Claiming electrical correctness/manufacturability without stating assumptions and recommended KiCad DRC checks.
+- Writing v6/v7 syntax into a v8/v9 header: `(tstamp ...)`, `(width ...)` on graphics, unquoted `"F.Cu"`, bare `hide`.
+- Emitting `(net_class ...)` in the board file (removed from the board format; use `.kicad_pro`/`.kicad_dru`).
+- Referencing net numbers that are not declared, or pad net names that disagree with the net table.
+- Omitting `Edge.Cuts`, leaving it open, or using zero-length/duplicate outline segments.
+- Footprints without `attr`, courtyard, pads or Reference/Value fields.
+- `(fill yes ...)` zones that were never refilled before plotting.
+- Tracks that reference the right net but do not geometrically touch a pad/via/track.
+- Guessing complex footprint pad geometry from memory instead of using a library/datasheet.
+- Claiming electrical correctness, impedance or manufacturability without assumptions and KiCad DRC/DFM checks.
+
+## Scope: When Not to Hand-Generate
+
+Hand-writing s-expressions is appropriate for small/medium boards, simple footprints and scripted prototypes. For dense BGA escape routing, impedance-critical RF/high-speed, flex/rigid, or large designs, use KiCad's GUI or the Python/IPC API to place real library footprints and let KiCad compute connectivity, fills and DRC. Say so rather than emitting a fragile approximation.
+
+## Validation Commands
+
+```bash
+# Structural/geometry pre-flight (no KiCad required)
+python3 scripts/check_pcb.py board.kicad_pcb
+python3 scripts/check_pcb.py --strict board.kicad_pcb
+
+# Authoritative checks when KiCad 8/9 is installed
+kicad-cli pcb drc --severity-all --exit-code-violations board.kicad_pcb
+kicad-cli pcb export gerbers -o gerbers/ board.kicad_pcb
+kicad-cli pcb export drill -o gerbers/ board.kicad_pcb
+```
