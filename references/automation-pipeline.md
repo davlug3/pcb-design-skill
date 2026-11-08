@@ -197,23 +197,52 @@ Freerouting 2.5.0 and 2.4.1 are both built for Java 25 in the current releases.
 The CI workflow downloads a pinned Adoptium JRE 25 instead of relying on the
 Debian default (Java 17).
 
-### Local vs CI
+### Local vs CI (automatic)
+
+`design_pipeline.py` defaults to `--backend auto`:
+
+1. **Probe** — `scripts/env_probe.py` checks pcbnew, `kicad-cli`, Java 25, the
+   Freerouting jar, `gh`, the git remote and whether the spec/scripts are
+   committed and pushed.
+2. **Local** — when every requested stage has its tools, the pipeline runs
+   locally. This is the normal path on a real PC with KiCad 9 installed.
+3. **CI** — when local tools are missing but `gh` is authenticated and the
+   current branch is clean and pushed, the pipeline dispatches
+   `.github/workflows/design.yml` with the spec path (and any `--schematic`,
+   `--netlist`, `--board` or skip flags) as workflow inputs.
+4. **Neither** — the pipeline stays local and reports exactly which tools are
+   missing, plus why CI is not usable.
+
+```bash
+python3 scripts/env_probe.py
+python3 scripts/design_pipeline.py all specs/board.json                  # auto
+python3 scripts/design_pipeline.py all specs/board.json --backend local
+python3 scripts/design_pipeline.py all specs/board.json --backend ci --ci-watch
+```
+
+CI dispatch refuses to run from a dirty working tree or an unpushed branch,
+because Actions checks out the pushed revision. Commit and push the spec,
+profiles, schemas, scripts and workflow first. Stage commands
+(`build`/`route`/`check`/`fab`) are local-only: CI cannot see uncommitted stage
+files, so use `all --backend ci` for an end-to-end run. Inside Actions the
+pipeline forces the local backend so it can never dispatch itself recursively.
 
 - **Local with KiCad 9:** `design_pipeline.py all` works end to end; set
   `KICAD9_FOOTPRINT_DIR` if the libraries are not in `/usr/share/kicad/footprints`.
 - **Local without KiCad (e.g. arm64 Termux):** generate/validate specs locally,
-  push, and let `.github/workflows/design.yml` run build/route/check/fab in the
-  official container. Java 25 is available in Termux via `pkg install openjdk-25`,
-  but pcbnew is not.
+  commit and push, then let `--backend auto` dispatch CI. Java 25 is available
+  in Termux via `pkg install openjdk-25`, but pcbnew is not.
 - **CI:** the design workflow runs as root inside `kicad/kicad:9.0`, installs
   `curl`, downloads JRE 25 + Freerouting, and runs the pipeline. It uploads
-  `design-output` and `design-report`.
+  `design-output` and `design-report`. A manual dispatch can select any
+  `specs/*.json` and pass schematic/netlist/board inputs or skip flags.
 
 ## Routing behavior
 
 - The builder exports DSN with `pcbnew.ExportSpecctraDSN`.
-- Each attempt runs Freerouting with `-de`, `-do`, `-mp`, `-mt`,
-  `--gui.enabled=false`.
+- Each attempt runs Freerouting 2.5 with `-de`, `-do`,
+  `--router.autorouter.max_passes`, `--router.optimizer.max_threads`,
+  `--router.optimizer.enabled` and `--gui.enabled=false`.
 - The SES is imported with `pcbnew.ImportSpecctraSES`, zones are refilled, and
   the attempt's unconnected count is measured with pcbnew connectivity.
 - The pipeline keeps the attempt with the fewest unconnected items (then fewer
@@ -234,6 +263,10 @@ Debian default (Java 17).
 | DRC errors after route | Clearance/width/edge/silk violations | Fix the spec rules/placement; do not hand-edit and re-claim |
 | Impedance target fails | Width/stackup combination is wrong | Adjust `track_width_mm`, dielectric thickness/er, or target |
 | `professional_claim: false` with no DRC error | Missing human sign-off | Complete the profile sign-off or change to the correct profile |
+| `CI DISPATCH FAILED: refusing ... uncommitted` | Actions would build the pushed revision, not the working tree | Commit and push the spec/scripts, then rerun `--backend ci` |
+| `CI DISPATCH FAILED: ... no upstream` | Branch was never pushed | `git push -u origin <branch>` |
+| `CI DISPATCH FAILED: gh CLI not found` | GitHub CLI missing | `pkg install gh` (Termux) or install `gh`, then `gh auth login` |
+| Auto chose local but pcbnew is missing | CI is not usable (dirty tree, no auth, or no workflow) | Fix the CI blockers printed by the probe, or run on a KiCad host |
 
 ## Extending the pipeline
 

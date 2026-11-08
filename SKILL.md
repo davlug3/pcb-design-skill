@@ -27,7 +27,8 @@ Do not hand-author a release board when this pipeline can do it. The pipeline tu
 # 1. Validate intent (no KiCad needed)
 python3 scripts/design_spec.py validate specs/led-blinky.json
 
-# 2. Full automatic design. Needs KiCad 9 pcbnew, Java 25 and Freerouting 2.5.0.
+# 2. Full automatic design. Auto-selects local when KiCad 9 pcbnew, Java 25
+#    and Freerouting 2.5.0 are present, otherwise dispatches GitHub Actions.
 python3 scripts/design_pipeline.py all specs/led-blinky.json
 
 # Electrical source of truth is a schematic or netlist; the spec supplies mechanics/rules.
@@ -58,7 +59,25 @@ python3 scripts/design_pipeline.py fab   build/led-blinky/led-blinky.kicad_pcb -
 
 `professional_claim` is true only when every hard gate passes **and** every required sign-off is listed in `signoff.completed`. RF, EMC, thermal, safety and flex fatigue cannot be certified by the pipeline; say so instead of overclaiming. Record a reviewer in `signoff.reviewer`.
 
-**Where to run it.** Full automation needs `pcbnew` (KiCad 9 Python), `kicad-cli`, Java 25 and `freerouting-2.5.0.jar` (Freerouting 2.5.0 is built for Java 25). On a machine without KiCad, push the spec and use `.github/workflows/design.yml`: it runs in the official `kicad/kicad:9.0` container, installs a JRE 25, downloads Freerouting, runs the whole pipeline, and uploads `design-output` + `design-report`. Termux users can install `openjdk-25`; a native KiCad install is still required for pcbnew, so CI is the recommended arm64 path.
+**Backend selection: local or CI (automatic).** Full automation needs `pcbnew` (KiCad 9 Python), `kicad-cli`, Java 25 and `freerouting-2.5.0.jar` (Freerouting 2.5.0 is built for Java 25). `--backend auto` is the default: it probes the current environment and runs locally when every requested stage has its tools, otherwise it dispatches `.github/workflows/design.yml`. That workflow runs in the official `kicad/kicad:9.0` container, installs a JRE 25, downloads Freerouting, runs the whole pipeline, and uploads `design-output` + `design-report`.
+
+| Environment | Probe result | Selected backend |
+|---|---|---|
+| Real PC with KiCad 9 + Java 25 + jar | all stages ready | local |
+| Termux / container without KiCad; `gh` authenticated; clean pushed repo | pcbnew/kicad-cli missing | CI |
+| No local tools and no usable CI | missing | local, fails with the missing-tool list |
+
+```bash
+python3 scripts/env_probe.py                        # what can this machine run?
+python3 scripts/env_probe.py --json                 # machine-readable probe
+python3 scripts/design_pipeline.py all specs/led-blinky.json                     # auto
+python3 scripts/design_pipeline.py all specs/led-blinky.json --backend local
+python3 scripts/design_pipeline.py all specs/led-blinky.json --backend ci --ci-watch --ci-download build/ci
+```
+
+CI dispatch is conservative: it refuses a dirty tree or a branch ahead of its upstream, because Actions checks out the pushed revision and would otherwise design the wrong board. Commit and push the spec, profiles, schemas, scripts and workflow first. `gh` must be installed and authenticated (`pkg install gh`, then `gh auth login`). Use `--ci-repo owner/name` only when dispatching a repository other than the current one.
+
+Stage commands (`build`, `route`, `check`, `fab`) run locally because CI cannot see uncommitted stage files; use `all --backend ci` for an end-to-end CI run. Inside GitHub Actions the pipeline always stays local, so a CI run never re-dispatches itself.
 
 **Iteration rule.** When a gate fails, change the spec (placement, width, clearance, stackup, class assignment) and regenerate. Do not edit a generated board and then claim the report applies; the report records the exact resolved spec (`<name>.spec.json`).
 
@@ -95,7 +114,9 @@ The developer docs lag the application in places (they still describe pre-v7 `(w
 | `scripts/pcb_route.py` | DSN export → Freerouting → SES import → zone fill |
 | `scripts/pcb_check.py` | Structural, DRC, DFM, netlist-parity and length-match gates |
 | `scripts/pcb_fab.py` | Gerbers, drill, position, STEP, IPC-D-356 and fabrication README |
-| `scripts/design_pipeline.py` | Orchestrates the whole automatic design and writes the release report |
+| `scripts/design_pipeline.py` | Orchestrates the whole automatic design and writes the release report; `--backend auto` selects local or CI |
+| `scripts/env_probe.py` | Detects pcbnew, kicad-cli, Java 25, Freerouting, gh/git and recommends local vs CI |
+| `scripts/ci_dispatch.py` | Dispatches `.github/workflows/design.yml`, optionally watches and downloads artifacts |
 | `scripts/check_pcb.py` | Dependency-free structural/geometry pre-flight checker |
 | `.github/workflows/design.yml` | CI: build, route, DRC/DFM, fab export and report in the KiCad 9 container |
 
@@ -224,6 +245,10 @@ Never describe a design as professional, fabrication-ready, impedance-controlled
 ## Validation Commands
 
 ```bash
+# Environment: which backend can run here?
+python3 scripts/env_probe.py
+python3 scripts/env_probe.py --spec specs/board.json --require ci
+
 # Spec validation (no KiCad required)
 python3 scripts/design_spec.py validate specs/board.json
 python3 scripts/design_spec.py explain specs/board.json

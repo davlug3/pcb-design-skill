@@ -10,8 +10,13 @@ required human sign-off is missing. That is intentional: automatic routing is
 not a substitute for RF, EMC, thermal, safety or flex sign-off.
 
 Examples:
-    # Full local run (KiCad python + Java + Freerouting jar present)
+    # Automatic backend: local when KiCad/Java/Freerouting are present,
+    # otherwise dispatch GitHub Actions (requires gh + a pushed branch)
     python3 scripts/design_pipeline.py all specs/led-blinky.json
+
+    # Force a backend
+    python3 scripts/design_pipeline.py all specs/led-blinky.json --backend local
+    python3 scripts/design_pipeline.py all specs/led-blinky.json --backend ci --ci-watch
 
     # Validate the intent only, no KiCad required
     python3 scripts/design_pipeline.py validate specs/led-blinky.json
@@ -40,7 +45,9 @@ from typing import Any
 SCRIPT_DIR = Path(__file__).resolve().parent
 ROOT = SCRIPT_DIR.parent
 sys.path.insert(0, str(SCRIPT_DIR))
+import ci_dispatch  # noqa: E402
 import design_spec as ds  # noqa: E402
+import env_probe  # noqa: E402
 import pcb_build  # noqa: E402
 import pcb_check  # noqa: E402
 import pcb_fab  # noqa: E402
@@ -63,6 +70,128 @@ def resolve_spec(args: argparse.Namespace, output_dir: Path) -> tuple[dict[str, 
     spec = ds.apply_defaults(ds.derive_nets(spec))
     profile = ds.load_profile(str(spec["profile"]))
     return spec, profile
+
+
+def requested_stages(args: argparse.Namespace) -> list[str]:
+    """Stages this invocation actually needs, based on flags and routing mode."""
+    raw = ds.apply_defaults(ds.load_json(args.spec)) if args.spec else {}
+    routing_mode = raw.get("routing", {}).get("mode", "freerouting")
+    stages: list[str] = []
+    if not args.skip_build and not args.board:
+        stages.append("build")
+    if not args.skip_route and routing_mode != "none":
+        stages.append("route")
+    if not args.skip_check:
+        stages.append("check")
+    if not args.skip_fab:
+        stages.append("fab")
+    return stages
+
+
+def resolve_backend(args: argparse.Namespace, stages: list[str]) -> tuple[str, dict[str, Any]]:
+    """Choose local or CI execution for this environment.
+
+    ``auto`` prefers local when every requested stage has its tools, then CI
+    when the repository is pushed and ``gh`` is authenticated. Inside GitHub
+    Actions it always stays local so a CI run can never re-dispatch itself.
+    """
+    probe = env_probe.probe(
+        jar=args.freerouting_jar or None,
+        kicad_cli=args.kicad_cli,
+        spec=args.spec,
+        paths=[path for path in (args.schematic, args.netlist, args.board) if path],
+        workflow=args.ci_workflow,
+    )
+    if os.environ.get("GITHUB_ACTIONS") == "true":
+        return "local", probe
+    if args.backend == "local":
+        return "local", probe
+    if args.backend == "ci":
+        return "ci", probe
+    if env_probe.stages_ready(probe, stages):
+        return "local", probe
+    if probe.get("ci", {}).get("usable"):
+        return "ci", probe
+    return "local", probe
+
+
+def announce_backend(backend: str, probe: dict[str, Any], stages: list[str]) -> None:
+    missing = env_probe.missing_for_stages(probe, stages)
+    if backend == "ci":
+        git = probe.get("ci", {}).get("git", {})
+        print(
+            f"[backend] ci - local pipeline missing: {', '.join(missing) or 'unknown'}; "
+            f"dispatching {git.get('detail', 'GitHub Actions')}"
+        )
+        return
+    if missing:
+        print(f"[backend] local - missing for requested stages: {', '.join(missing)}")
+        ci = probe.get("ci", {})
+        if ci.get("usable"):
+            print("          use --backend ci to run these stages in GitHub Actions")
+        else:
+            print("[backend] ci not available:")
+            blockers = ci.get("blockers", [])
+            if blockers:
+                for blocker in blockers:
+                    print(f"          - {blocker}")
+            else:
+                detail = ci.get("gh", {}).get("detail") or "gh and a pushed branch are required"
+                print(f"          - {detail}")
+    else:
+        print("[backend] local - all required tools present")
+
+
+def backend_extra(backend: str, probe: dict[str, Any], stages: list[str]) -> dict[str, Any]:
+    return {
+        "selected": backend,
+        "environment": "ci" if os.environ.get("GITHUB_ACTIONS") == "true" else "local",
+        "missing": env_probe.missing_for_stages(probe, stages),
+        "local_ready": env_probe.stages_ready(probe, stages),
+        "ci_usable": probe.get("ci", {}).get("usable", False),
+    }
+
+
+def dispatch_ci(args: argparse.Namespace) -> int:
+    if args.footprints_dir:
+        print("NOTE: --footprints-dir is local-only; CI uses the container's KiCad libraries", file=sys.stderr)
+    if args.output:
+        print("NOTE: -o is local-only; CI writes build/<spec-name>/ and artifacts are downloaded separately", file=sys.stderr)
+    if args.freerouting_jar:
+        print("NOTE: --freerouting-jar is local-only; CI downloads the pinned Freerouting jar", file=sys.stderr)
+    if args.kicad_cli and args.kicad_cli != "kicad-cli":
+        print("NOTE: --kicad-cli is local-only; CI uses the container's kicad-cli", file=sys.stderr)
+
+    inputs: dict[str, Any] = {}
+    for key in ("schematic", "netlist", "board"):
+        value = getattr(args, key)
+        if value:
+            inputs[key] = value
+    for key in ("skip_build", "skip_route", "skip_check", "skip_fab", "allow_unverified"):
+        if getattr(args, key):
+            inputs[key] = True
+
+    try:
+        result = ci_dispatch.dispatch(
+            args.spec,
+            repo=args.ci_repo,
+            workflow=args.ci_workflow,
+            ref=args.ci_ref,
+            inputs=inputs,
+            watch=args.ci_watch or bool(args.ci_download),
+            download_dir=args.ci_download,
+            timeout=args.ci_timeout,
+        )
+    except ci_dispatch.CiError as exc:
+        print(f"CI DISPATCH FAILED: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"[ci] {result['url']}")
+    if result["downloaded"]:
+        print(f"[ci] artifacts: {result['downloaded']}")
+    if result["conclusion"]:
+        print(f"[ci] conclusion: {result['conclusion']}")
+    return int(result["exit_code"])
 
 
 def stackup_gate(spec: dict[str, Any], profile: dict[str, Any]) -> int:
@@ -103,6 +232,7 @@ def report_markdown(report: dict[str, Any], extra: dict[str, Any]) -> str:
         f"**Status: {status}**",
         "",
         f"- Profile: `{report['profile']}` ({report['automation']})",
+        f"- Backend: `{extra.get('backend', {}).get('selected', 'local')}` ({extra.get('backend', {}).get('environment', 'local')})",
         f"- Failures: {', '.join(report['failures']) if report['failures'] else 'none'}",
         f"- Required human sign-off: {', '.join(report['required_signoff']) or 'none'}",
         f"- Completed sign-off: {', '.join(report['completed_signoff']) or 'none'}",
@@ -200,6 +330,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
 
 
 def cmd_all(args: argparse.Namespace) -> int:
+    stages_needed = requested_stages(args)
+    backend, probe = resolve_backend(args, stages_needed)
+    announce_backend(backend, probe, stages_needed)
+    if backend == "ci":
+        return dispatch_ci(args)
+
     base_output = Path(args.output) if args.output else ROOT / "build"
     started = time.time()
     spec, profile = resolve_spec(args, base_output)
@@ -213,13 +349,20 @@ def cmd_all(args: argparse.Namespace) -> int:
         print(f"ERROR [{item['code']}] {item['message']}", file=sys.stderr)
     if not findings.ok:
         report = ds.gate_report(spec, profile, findings, {})
-        extra = {"spec": str(resolved_spec_path), "findings_only": True}
+        extra = {
+            "spec": str(resolved_spec_path),
+            "findings_only": True,
+            "backend": backend_extra(backend, probe, stages_needed),
+        }
         write_report(report, extra, output_dir)
         return 1
 
     board_path = Path(args.board) if args.board else output_dir / f"{spec['name']}.kicad_pcb"
     stages: dict[str, Any] = {}
-    extra: dict[str, Any] = {"spec": str(resolved_spec_path)}
+    extra: dict[str, Any] = {
+        "spec": str(resolved_spec_path),
+        "backend": backend_extra(backend, probe, stages_needed),
+    }
 
     if not args.board and not args.skip_build:
         print(f"[build] {board_path}")
@@ -309,6 +452,16 @@ def cmd_all(args: argparse.Namespace) -> int:
 
 
 def cmd_stage(args: argparse.Namespace) -> int:
+    stages_needed = [args.command]
+    backend, probe = resolve_backend(args, stages_needed)
+    if backend == "ci":
+        print(
+            "CI runs the full pipeline and cannot see local stage files. "
+            f"Use: python3 scripts/design_pipeline.py all {args.spec} --backend ci",
+            file=sys.stderr,
+        )
+        return 1
+    announce_backend(backend, probe, stages_needed)
     spec, profile = resolve_spec(args, Path(args.output) if args.output else ROOT / "build")
     findings = ds.validate_spec(spec, profile)
     if not findings.ok:
@@ -350,6 +503,18 @@ def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--skip-check", action="store_true")
     parser.add_argument("--skip-fab", action="store_true")
     parser.add_argument("--allow-unverified", action="store_true", help="exit 0 even without a professional claim")
+    parser.add_argument(
+        "--backend",
+        choices=("auto", "local", "ci"),
+        default=os.environ.get("PCB_BACKEND", "auto"),
+        help="where to run build/route/check/fab: auto detects local tools, then falls back to GitHub Actions",
+    )
+    parser.add_argument("--ci-repo", help="owner/name for CI dispatch (default: current git remote)")
+    parser.add_argument("--ci-workflow", default=os.environ.get("PCB_CI_WORKFLOW", "design.yml"))
+    parser.add_argument("--ci-ref", help="branch for CI dispatch (default: current branch)")
+    parser.add_argument("--ci-watch", action="store_true", help="wait for the CI run to finish")
+    parser.add_argument("--ci-download", help="download CI artifacts here (implies --ci-watch)")
+    parser.add_argument("--ci-timeout", type=int, default=3600, help="CI watch timeout in seconds")
     parser.add_argument("--json", action="store_true")
 
 

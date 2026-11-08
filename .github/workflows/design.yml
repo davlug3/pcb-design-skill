@@ -18,6 +18,52 @@ on:
       - "tests/**"
       - ".github/workflows/design.yml"
   workflow_dispatch:
+    inputs:
+      spec:
+        description: "Design spec to run (path under specs/)"
+        required: false
+        default: "specs/led-blinky.json"
+        type: string
+      schematic:
+        description: "Optional KiCad schematic (repo-relative path)"
+        required: false
+        default: ""
+        type: string
+      netlist:
+        description: "Optional KiCad netlist (repo-relative path)"
+        required: false
+        default: ""
+        type: string
+      board:
+        description: "Optional existing board (repo-relative path); pair with skip_build"
+        required: false
+        default: ""
+        type: string
+      skip_build:
+        description: "Skip the build stage"
+        required: false
+        default: false
+        type: boolean
+      skip_route:
+        description: "Skip Freerouting"
+        required: false
+        default: false
+        type: boolean
+      skip_check:
+        description: "Skip DRC/DFM/parity gates"
+        required: false
+        default: false
+        type: boolean
+      skip_fab:
+        description: "Skip fabrication export"
+        required: false
+        default: false
+        type: boolean
+      allow_unverified:
+        description: "Exit 0 even when the professional claim fails"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -58,8 +104,35 @@ jobs:
     name: Build, route, DRC and fab
     runs-on: ubuntu-latest
     needs: spec
+    env:
+      SPEC: ${{ github.event.inputs.spec || 'specs/led-blinky.json' }}
+      SCHEMATIC: ${{ github.event.inputs.schematic }}
+      NETLIST: ${{ github.event.inputs.netlist }}
+      BOARD: ${{ github.event.inputs.board }}
+      SKIP_BUILD: ${{ github.event.inputs.skip_build }}
+      SKIP_ROUTE: ${{ github.event.inputs.skip_route }}
+      SKIP_CHECK: ${{ github.event.inputs.skip_check }}
+      SKIP_FAB: ${{ github.event.inputs.skip_fab }}
+      ALLOW_UNVERIFIED: ${{ github.event.inputs.allow_unverified }}
     steps:
       - uses: actions/checkout@v7
+      - name: Resolve inputs
+        run: |
+          set -euo pipefail
+          SPEC="${SPEC:-specs/led-blinky.json}"
+          case "$SPEC" in
+            specs/*.json) ;;
+            *) echo "::error::spec must be a path under specs/ (got: $SPEC)"; exit 1 ;;
+          esac
+          [ -f "$SPEC" ] || { echo "::error::spec not found: $SPEC"; exit 1; }
+          for path in "$SCHEMATIC" "$NETLIST" "$BOARD"; do
+            if [ -n "$path" ] && [ ! -f "$path" ]; then
+              echo "::error::input not found: $path"
+              exit 1
+            fi
+          done
+          echo "SPEC_NAME=$(basename "$SPEC" .json)" >> "$GITHUB_ENV"
+          echo "Resolved spec: $SPEC"
       - name: Prepare writable output
         run: |
           mkdir -p build
@@ -73,6 +146,8 @@ jobs:
             -v "${PWD}:/work" -w /work \
             -e HOME=/tmp \
             -e GITHUB_STEP_SUMMARY=/work/build/summary.md \
+            -e SPEC -e SPEC_NAME -e SCHEMATIC -e NETLIST -e BOARD \
+            -e SKIP_BUILD -e SKIP_ROUTE -e SKIP_CHECK -e SKIP_FAB -e ALLOW_UNVERIFIED \
             kicad/kicad:9.0 \
             bash -lc '
               set -euo pipefail
@@ -100,11 +175,17 @@ jobs:
               fi
               python3 -c "import pcbnew; print(\"pcbnew\", pcbnew.GetBuildVersion())"
 
-              python3 scripts/design_pipeline.py all \
-                specs/led-blinky.json \
-                -o build/led-blinky \
-                --freerouting-jar build/freerouting.jar \
-                --kicad-cli kicad-cli
+              args=(all "$SPEC" -o "build/$SPEC_NAME" --freerouting-jar build/freerouting.jar --kicad-cli kicad-cli)
+              if [ -n "${SCHEMATIC:-}" ]; then args+=(--schematic "$SCHEMATIC"); fi
+              if [ -n "${NETLIST:-}" ]; then args+=(--netlist "$NETLIST"); fi
+              if [ -n "${BOARD:-}" ]; then args+=(--board "$BOARD"); fi
+              if [ "${SKIP_BUILD:-false}" = "true" ]; then args+=(--skip-build); fi
+              if [ "${SKIP_ROUTE:-false}" = "true" ]; then args+=(--skip-route); fi
+              if [ "${SKIP_CHECK:-false}" = "true" ]; then args+=(--skip-check); fi
+              if [ "${SKIP_FAB:-false}" = "true" ]; then args+=(--skip-fab); fi
+              if [ "${ALLOW_UNVERIFIED:-false}" = "true" ]; then args+=(--allow-unverified); fi
+
+              python3 scripts/design_pipeline.py "${args[@]}"
             '
       - name: Publish design summary
         if: always()
@@ -113,16 +194,16 @@ jobs:
             cat build/summary.md >> "${GITHUB_STEP_SUMMARY}"
           fi
       - name: Upload design outputs
-        if: always()
+        if: always() && env.SPEC_NAME != ''
         uses: actions/upload-artifact@v7
         with:
           name: design-output
-          path: build/led-blinky/
+          path: build/${{ env.SPEC_NAME }}/
           if-no-files-found: warn
       - name: Upload design report
-        if: always()
+        if: always() && env.SPEC_NAME != ''
         uses: actions/upload-artifact@v7
         with:
           name: design-report
-          path: build/led-blinky/report/
+          path: build/${{ env.SPEC_NAME }}/report/
           if-no-files-found: warn

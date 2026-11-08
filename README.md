@@ -24,7 +24,9 @@ An Agent Skill for **professional automatic PCB design** with KiCad 9. It turns 
 | `scripts/pcb_route.py` | DSN export → Freerouting → SES import → zone fill |
 | `scripts/pcb_check.py` | Structural, DRC, DFM, netlist-parity and length-match gates |
 | `scripts/pcb_fab.py` | Gerbers, drill, position, STEP, IPC-D-356 and fabrication README |
-| `scripts/design_pipeline.py` | Orchestrates build/route/check/fab and writes the release report |
+| `scripts/design_pipeline.py` | Orchestrates build/route/check/fab and writes the release report; `--backend auto` selects local or CI |
+| `scripts/env_probe.py` | Detects pcbnew, kicad-cli, Java 25, Freerouting, gh/git and recommends local vs CI |
+| `scripts/ci_dispatch.py` | Dispatches `.github/workflows/design.yml`, optionally watches and downloads artifacts |
 | `scripts/check_pcb.py` | Structural/geometry pre-flight validator |
 | `tests/` | Unit tests for spec validation, impedance, netlist import and gates |
 | `references/pcb-file-format.md` | Board sections, version matrix, layer ordinals, footprints, pads, tracks, zones |
@@ -51,24 +53,29 @@ The `name` in `SKILL.md` must match the directory name (`pcb-design-skill`).
 
 ## Automatic design
 
-The automatic path needs:
+The local automatic path needs:
 
 - **KiCad 9** with its Python bindings (`python3 -c "import pcbnew"` must work)
 - **Java 25+** (Freerouting 2.5.0 is built for Java 25)
 - `freerouting-2.5.0.jar` (not committed; 62 MB)
 
-On Termux, install `openjdk-25` and download the jar; KiCad itself is not available natively, so use CI for the pcbnew stages. On Debian/Ubuntu, use the official container or a KiCad 9 install.
+`design_pipeline.py all` defaults to `--backend auto`. It probes the local tools, runs locally when every requested stage is ready, and otherwise dispatches `.github/workflows/design.yml` when `gh` is authenticated and the branch is clean and pushed. On Termux, install `openjdk-25` and download the jar for local stage experiments; KiCad itself is not available natively, so the CI backend is the normal path for build/route/check/fab. On Debian/Ubuntu, use the official container or a KiCad 9 install.
 
 ```bash
 # 1. Validate the design intent (no KiCad required)
 python3 scripts/design_spec.py validate specs/led-blinky.json
 
-# 2. Download Freerouting once
+# 2. Download Freerouting once (needed for local routing only)
 curl -fL -o scripts/freerouting.jar \
   https://github.com/freerouting/freerouting/releases/download/v2.5.0/freerouting-2.5.0.jar
 
-# 3. Full automatic design
+# 3. Full automatic design: local if ready, otherwise CI
 python3 scripts/design_pipeline.py all specs/led-blinky.json
+
+# Inspect the probe or force a backend
+python3 scripts/env_probe.py
+python3 scripts/design_pipeline.py all specs/led-blinky.json --backend local
+python3 scripts/design_pipeline.py all specs/led-blinky.json --backend ci --ci-watch
 ```
 
 Outputs land in `build/led-blinky/`:
@@ -137,11 +144,18 @@ kicad-cli pcb export ipcd356 -o board-ipc356.net board.kicad_pcb
 `.github/workflows/design.yml` runs the full pipeline on pushes/PRs that touch a spec, profile, schema, script or the workflow:
 
 1. **Spec job** — compiles the scripts, validates every `specs/*.json`, and checks the reference spec.
-2. **Design job** — runs the official `kicad/kicad:9.0` container as root, installs `curl`, downloads a pinned Adoptium JRE 25, downloads Freerouting 2.5.0, and runs `design_pipeline.py all specs/led-blinky.json`.
+2. **Design job** — runs the official `kicad/kicad:9.0` container as root, installs `curl`, downloads a pinned Adoptium JRE 25, downloads Freerouting 2.5.0, and runs `design_pipeline.py all` on the selected spec (default `specs/led-blinky.json`).
 3. **Artifacts** — `design-output` (board, project, route logs, check results, fabrication package) and `design-report`.
 4. The job fails if `professional_claim` is false, so a broken/unrouted/DRC-failing board cannot silently merge.
 
-The container is `linux/amd64`; use a GitHub-hosted runner or an amd64 Docker host. For local arm64, use a native KiCad 9 install, or let CI do the pcbnew/routing stages.
+`design_pipeline.py --backend auto` dispatches this workflow when the local machine cannot run the pcbnew stages (for example Termux). A manual **Run workflow** dispatch accepts a `spec` input plus optional `schematic`, `netlist`, `board`, `skip_*` and `allow_unverified` inputs. CI dispatch requires `gh`, an authenticated session, and a clean branch that is not ahead of its upstream; otherwise the pipeline refuses to dispatch rather than designing the wrong revision.
+
+```bash
+python3 scripts/ci_dispatch.py --spec specs/led-blinky.json
+python3 scripts/ci_dispatch.py --spec specs/led-blinky.json --watch --download build/ci
+```
+
+The container is `linux/amd64`; use a GitHub-hosted runner or an amd64 Docker host. For local arm64, use a native KiCad 9 install, or let `--backend auto` send the pcbnew stages to CI.
 
 ## Automated DRC in CI
 
