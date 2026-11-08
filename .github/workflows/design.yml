@@ -145,6 +145,7 @@ jobs:
           docker run --rm --user root \
             -v "${PWD}:/work" -w /work \
             -e HOME=/tmp \
+            -e GITHUB_ACTIONS \
             -e GITHUB_STEP_SUMMARY=/work/build/summary.md \
             -e SPEC -e SPEC_NAME -e SCHEMATIC -e NETLIST -e BOARD \
             -e SKIP_BUILD -e SKIP_ROUTE -e SKIP_CHECK -e SKIP_FAB -e ALLOW_UNVERIFIED \
