@@ -118,6 +118,30 @@ COMMON_FOOTPRINTS: dict[str, list[tuple[str, str]]] = {
         ("Package_DIP:DIP-14_W7.62mm", "DIP-14 · 7.62 mm"),
         ("Package_DIP:DIP-16_W7.62mm", "DIP-16 · 7.62 mm"),
     ],
+    "inductor": [
+        ("Inductor_SMD:L_0805_2012Metric", "0805 · 2.0 × 1.2 mm"),
+        ("Inductor_SMD:L_1206_3216Metric", "1206 · 3.2 × 1.6 mm"),
+        ("Inductor_SMD:L_1210_3225Metric", "1210 · 3.2 × 2.5 mm"),
+    ],
+    "diode": [
+        ("Diode_SMD:D_SOD-323", "SOD-323 · 1.7 × 1.25 mm"),
+        ("Diode_SMD:D_SOD-123", "SOD-123 · 2.7 × 1.6 mm"),
+        ("Diode_SMD:D_SMA", "SMA · 4.3 × 2.6 mm"),
+        ("Diode_SMD:D_SMB", "SMB · 4.6 × 3.6 mm"),
+        ("Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal", "DO-35 THT · 7.62 mm"),
+    ],
+    "ic": [
+        ("Package_DIP:DIP-8_W7.62mm", "DIP-8 · 7.62 mm"),
+        ("Package_DIP:DIP-14_W7.62mm", "DIP-14 · 7.62 mm"),
+        ("Package_SO:SOIC-8_3.9x4.9mm_P1.27mm", "SOIC-8 · 1.27 mm"),
+        ("Package_SO:SOIC-14_3.9x8.7mm_P1.27mm", "SOIC-14 · 1.27 mm"),
+        ("Package_QFP:TQFP-32_7x7mm_P0.8mm", "TQFP-32 · 0.8 mm"),
+        (
+            "Package_DFN_QFN:QFN-16-1EP_3x3mm_P0.5mm_EP1.7x1.7mm",
+            "QFN-16 · 3 × 3 mm",
+        ),
+        ("Package_TO_SOT_SMD:SOT-23-5", "SOT-23-5 · 5 pins"),
+    ],
 }
 
 

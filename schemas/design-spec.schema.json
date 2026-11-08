@@ -245,6 +245,21 @@
     "assumptions": {
       "type": "array",
       "items": {"type": "string"}
+    },
+    "netlist_source": {
+      "type": "string",
+      "description": "Path of the KiCad netlist, schematic export, or LTspice netlist that supplied connectivity."
+    },
+    "import": {
+      "type": "object",
+      "description": "Provenance and warnings from a schematic, netlist, or LTspice import.",
+      "additionalProperties": false,
+      "properties": {
+        "format": {"enum": ["kicad-netlist", "ltspice"]},
+        "source": {"type": "string"},
+        "warnings": {"type": "array", "items": {"type": "string"}},
+        "excluded": {"type": "array", "items": {"type": "string"}}
+      }
     }
   }
 }

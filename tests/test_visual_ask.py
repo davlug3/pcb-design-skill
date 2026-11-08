@@ -263,6 +263,34 @@ class SpecPayloadTests(unittest.TestCase):
         with self.assertRaises(visual_ask.PayloadError):
             visual_ask.build_spec_payload(spec, only_missing=True)
 
+    def test_categories_override_missing_footprints(self) -> None:
+        spec = {
+            "name": "spice-test",
+            "components": [
+                {"ref": "R1", "value": "1k", "footprint": ""},
+                {"ref": "Q1", "value": "2N3904", "footprint": ""},
+                {"ref": "X1", "value": "OPAMP", "footprint": ""},
+            ],
+        }
+        data = visual_ask.build_spec_payload(
+            spec,
+            only_missing=True,
+            categories={"R1": "resistor", "Q1": "sot", "X1": "ic"},
+        )
+        normalized = visual_ask.normalize_payload(data, enrich=False)
+        by_id = {question["id"]: question for question in normalized["questions"]}
+        self.assertEqual(by_id["footprint_R1"]["type"], "footprint")
+        self.assertEqual(by_id["footprint_Q1"]["type"], "footprint")
+        self.assertEqual(by_id["footprint_X1"]["type"], "footprint")
+        self.assertEqual(
+            by_id["footprint_Q1"]["options"][0]["id"],
+            "Package_TO_SOT_SMD:SOT-23",
+        )
+        self.assertEqual(
+            by_id["footprint_X1"]["options"][0]["id"],
+            "Package_DIP:DIP-8_W7.62mm",
+        )
+
 
 class CatalogTests(unittest.TestCase):
     def test_catalog_payload_has_real_ids(self) -> None:
@@ -276,6 +304,14 @@ class CatalogTests(unittest.TestCase):
     def test_unknown_category_rejected(self) -> None:
         with self.assertRaises(visual_ask.PayloadError):
             visual_ask.build_catalog_payload("R1", "not-a-category")
+
+    def test_spice_categories_have_real_ids(self) -> None:
+        for category in ("inductor", "diode", "ic"):
+            data = visual_ask.build_catalog_payload("X1", category)
+            normalized = visual_ask.normalize_payload(data, enrich=False)
+            options = normalized["questions"][0]["options"]
+            self.assertTrue(options)
+            self.assertTrue(all(":" in option["id"] for option in options))
 
 
 class ServerTests(unittest.TestCase):

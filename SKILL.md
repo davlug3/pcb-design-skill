@@ -35,6 +35,12 @@ python3 scripts/design_pipeline.py all specs/led-blinky.json
 python3 scripts/design_pipeline.py all specs/led-blinky.json --schematic design.kicad_sch
 python3 scripts/design_pipeline.py all specs/led-blinky.json --netlist design.net
 
+# LTspice/SPICE netlists have no footprints or pad numbers. The pipeline asks
+# for missing pin maps, footprints, placement and node aliases in the visual
+# picker. Use --no-ask in CI or scripts.
+python3 scripts/design_pipeline.py all specs/led-blinky.json \
+  --ltspice design.cir --pin-map pinmap.json --node-aliases aliases.json
+
 # Existing board: route/check/export without rebuilding.
 python3 scripts/design_pipeline.py all specs/led-blinky.json --board existing.kicad_pcb --skip-build
 
@@ -45,7 +51,7 @@ python3 scripts/design_pipeline.py check build/led-blinky/led-blinky.kicad_pcb -
 python3 scripts/design_pipeline.py fab   build/led-blinky/led-blinky.kicad_pcb --spec specs/led-blinky.json -o build/led-blinky/fab
 ```
 
-**Canonical inputs.** `specs/<name>.json` is the source of truth for the automatic path. Use `schemas/design-spec.schema.json` and `specs/led-blinky.json` as the model. For a natural-language request, write the spec first, state assumptions in `assumptions[]`, then run the pipeline. For a KiCad schematic/netlist, the netlist is authoritative for components/pad nets; the spec overlay supplies board size, stackup, rules, placement and routing.
+**Canonical inputs.** `specs/<name>.json` is the source of truth for the automatic path. Use `schemas/design-spec.schema.json` and `specs/led-blinky.json` as the model. For a natural-language request, write the spec first, state assumptions in `assumptions[]`, then run the pipeline. For a KiCad schematic/netlist, the netlist is authoritative for components/pad nets; the spec overlay supplies board size, stackup, rules, placement and routing. For an LTspice/SPICE netlist, `--ltspice` derives connectivity from SPICE nodes and asks for missing pin maps, footprints, placement and node aliases with the visual picker; the overlay still supplies board size, stackup and rules. Prefer importing the `.asc` schematic into KiCad 9 when possible.
 
 **Board-class profiles.** The profile selects the rule envelope and the release gates:
 

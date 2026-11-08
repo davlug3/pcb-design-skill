@@ -163,7 +163,7 @@ def dispatch(
         raise CiError("not inside a git repository; CI needs a pushed spec. Pass --ci-repo owner/name to override.")
 
     payload = dict(inputs or {})
-    path_keys = [key for key in ("schematic", "netlist", "board") if payload.get(key)]
+    path_keys = [key for key in ("schematic", "netlist", "ltspice", "pin_map", "node_aliases", "board") if payload.get(key)]
     if root is not None:
         spec_rel = env_probe.repo_relative(root, spec, cwd)
         if spec_rel is None:
@@ -293,6 +293,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--timeout", type=int, default=3600, help="watch timeout in seconds")
     parser.add_argument("--schematic", help="KiCad schematic input")
     parser.add_argument("--netlist", help="KiCad netlist input")
+    parser.add_argument("--ltspice", help="LTspice/SPICE netlist input")
+    parser.add_argument("--pin-map", help="LTspice pin map JSON")
+    parser.add_argument("--node-aliases", help="LTspice node-alias JSON")
     parser.add_argument("--board", help="existing board input")
     parser.add_argument("--skip-build", action="store_true")
     parser.add_argument("--skip-route", action="store_true")
@@ -302,7 +305,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     inputs: dict[str, Any] = {}
-    for key in ("schematic", "netlist", "board"):
+    for key in ("schematic", "netlist", "ltspice", "pin_map", "node_aliases", "board"):
         value = getattr(args, key)
         if value:
             inputs[key] = value

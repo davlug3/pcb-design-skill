@@ -10,8 +10,9 @@ gates and an explicit release claim**.
 input                         canonical spec             geometry                 release
 -----                         --------------             --------                 -------
 JSON spec -----------------+
-KiCad netlist -------------+--> design spec --> validate --> build (pcbnew) --> route (Freerouting)
-KiCad schematic -----------+                                   |                    |
+KiCad netlist -------------+
+KiCad schematic -----------+--> design spec --> validate --> build (pcbnew) --> route (Freerouting)
+LTspice/SPICE netlist -----+                                   |                    |
 Existing .kicad_pcb -------------------------------------------+--------------------+
                                                                                     |
                          +----------------------------------------------------------+
@@ -85,7 +86,78 @@ the overlay. This requires `kicad-cli` (the KiCad container or a local install).
 python3 scripts/design_pipeline.py all specs/board.json --schematic design.kicad_sch
 ```
 
-### 4. Existing `.kicad_pcb`
+### 4. LTspice / SPICE netlist
+
+`--ltspice` imports a line-oriented LTspice `.net` or `.cir` file. SPICE
+netlists are **best effort**: they carry no footprints and no pad numbers, so
+the spec overlay must supply footprints and placement, and multi-pin parts
+need a pin map. Two-terminal `R`, `C`, `L` and `D` elements default to pads
+`1` and `2`.
+
+```bash
+python3 scripts/design_pipeline.py all specs/board.json \
+  --ltspice design.cir --pin-map pinmap.json --node-aliases aliases.json
+```
+
+`pinmap.json` maps SPICE pins to footprint pads:
+
+```json
+{
+  "defaults": {
+    "R": ["1", "2"],
+    "C": ["1", "2"],
+    "L": ["1", "2"],
+    "D": ["1", "2"]
+  },
+  "refs": {
+    "Q1": {"c": "2", "b": "1", "e": "3"},
+    "M1": {"d": "1", "g": "2", "s": "3", "b": "4"},
+    "X1": ["1", "2", "3", "4", "5"]
+  },
+  "exclude": ["V1", "I1"],
+  "include": []
+}
+```
+
+For `X` (subcircuit) instances, an ordered pad list is the safe default. A
+port-name object also works when the netlist contains the matching inline
+`.subckt` definition. `Q`, `M`, `J` and `X` elements never guess a package
+pinout: the pipeline asks for one with the visual picker, or raises a clear
+error when asking is disabled.
+
+When `--ltspice` is used without a complete pin map, footprint overlay or
+placement, the pipeline opens the visual question page and asks for the missing
+data. Pin maps offer common package choices plus a custom JSON field;
+footprints use the real KiCad footprint cards; node aliases offer a choice
+between the overlay's named nets and the raw SPICE node. Answers are written to
+`build/<name>/ask/`, and the merged pin map and aliases are saved as
+`pinmap.resolved.json` and `aliases.resolved.json` for reuse. Use
+`--ask-mobile` to answer on a phone, `--ask-no-fetch` for an offline session,
+and `--no-ask` for CI or scripts. CI dispatch refuses a SPICE import that still
+needs an interactive answer rather than hanging.
+
+`aliases.json` gives SPICE nodes meaningful PCB net names so netclasses,
+voltage and current rules still apply:
+
+```json
+{"0": "GND", "N001": "+5V", "N002": "LED_A"}
+```
+
+Voltage/current sources, behavioral and controlled sources, coupling,
+switches and transmission lines are simulation-only and excluded by default.
+List a reference in `pinmap.json.include` to place it (for example a test
+point), or in `exclude` to drop any other element. An overlay component that
+is not in the SPICE netlist (a connector, test point or mounting part) must
+also be listed in `exclude` so the merge keeps it instead of raising an
+error. External `.include`/`.lib` files are not resolved; put the relevant
+`.subckt` in the netlist or use an ordered pin map.
+
+For a KiCad-native workflow, prefer importing the LTspice **schematic**
+(`.asc`) with KiCad 9 (`File → Import → Non-KiCad Schematic…`), assigning
+footprints, and using `--schematic`. That preserves references and connectivity
+without a hand-written pin map.
+
+### 5. Existing `.kicad_pcb`
 
 Use `--board` and `--skip-build` to route/check/export a board that already
 exists. The spec still supplies the rules, netclasses and profile gates.
@@ -95,7 +167,7 @@ python3 scripts/design_pipeline.py all specs/board.json \
   --board existing.kicad_pcb --skip-build
 ```
 
-### 5. Natural language
+### 6. Natural language
 
 The agent writes the spec first, records assumptions in `assumptions[]`, then
 runs the pipeline. Do not let a natural-language request bypass the spec: the

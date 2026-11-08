@@ -5,7 +5,7 @@ An Agent Skill for **professional automatic PCB design** with KiCad 9. It turns 
 ## What it does
 
 - **Automatic design:** spec validation → board build with real KiCad footprints → Freerouting → DRC/DFM → Gerbers/drill/position/STEP/IPC-D-356 → gate report.
-- **Multiple inputs:** canonical JSON spec, KiCad schematic, KiCad netlist, or an existing `.kicad_pcb` for route/check/export; a natural-language request is first converted into a reviewable spec.
+- **Multiple inputs:** canonical JSON spec, KiCad schematic, KiCad netlist, LTspice/SPICE netlist, or an existing `.kicad_pcb` for route/check/export; a natural-language request is first converted into a reviewable spec.
 - **Board-class profiles:** 2-layer low-speed (full automation), 4/6-layer controlled impedance, RF/mixed-signal, flex-rigid, and high-voltage. Profiles define the hard gates and required human sign-offs.
 - **Professional honesty:** `professional_claim` is true only when every hard gate passes and every required sign-off is recorded. RF, EMC, thermal, safety and flex fatigue are never claimed without sign-off.
 - **Visual part selection:** a local/LAN, mobile-first page asks for footprints and other design choices with real KiCad footprint previews, then writes typed JSON answers for the agent.
@@ -107,7 +107,27 @@ The pipeline exits non-zero unless `professional_claim` is true. That is the poi
 python3 scripts/design_pipeline.py all specs/board.json --schematic design.kicad_sch
 python3 scripts/design_pipeline.py all specs/board.json --netlist design.net
 python3 scripts/design_pipeline.py all specs/board.json --board existing.kicad_pcb --skip-build
+
+# LTspice/SPICE is best effort: no footprints or pad numbers in the file.
+python3 scripts/design_pipeline.py all specs/board.json \
+  --ltspice design.cir --pin-map pinmap.json --node-aliases aliases.json
 ```
+
+`pinmap.json` maps SPICE pins to footprint pads, for example
+`{"refs": {"Q1": {"c": "2", "b": "1", "e": "3"}}}`; `aliases.json` maps nodes
+such as `{"0": "GND", "N001": "+5V"}` so netclasses and voltage rules apply.
+`R`/`C`/`L`/`D` default to pads 1/2, while `Q`/`M`/`J`/`X` require an explicit
+map. Simulation-only sources are excluded by default.
+
+When a SPICE import still needs a pin map, footprint, placement or node alias,
+the pipeline asks for it in the visual picker instead of failing. Answers are
+saved under `build/<name>/ask/`. Use `--ask-mobile` to answer on a phone,
+`--ask-no-fetch` to skip footprint-preview downloads, and `--no-ask` in CI or
+scripts; CI dispatch refuses a SPICE import that still needs an interactive
+answer. The resolved pin map and aliases are written to
+`build/<name>/ask/pinmap.resolved.json` and `aliases.resolved.json` so they can
+be reused. For a KiCad-native path, import the LTspice `.asc` schematic in
+KiCad 9 and use `--schematic` instead.
 
 **Profiles:** `2layer-low-speed` (full automation), `4layer-impedance` / `6layer-impedance` (stackup + impedance + length-match gates; sign-off required), `rf-mixed-signal` (RF/EMC/thermal sign-off), `flex-rigid` (mechanical/flex/assembly sign-off), `high-voltage` (safety/creepage sign-off).
 

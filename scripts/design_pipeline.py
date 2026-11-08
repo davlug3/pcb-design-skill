@@ -29,6 +29,11 @@ Examples:
     # Import a KiCad schematic as the electrical source of truth
     python3 scripts/design_pipeline.py all specs/led-blinky.json \
         --schematic design.kicad_sch
+
+    # Import an LTspice/SPICE netlist. Missing pin maps, footprints, placement
+    # and node aliases are asked for in the visual picker. Use --no-ask in CI.
+    python3 scripts/design_pipeline.py all specs/led-blinky.json \
+        --ltspice design.cir --pin-map pinmap.json --node-aliases aliases.json
 """
 
 from __future__ import annotations
@@ -53,11 +58,45 @@ import pcb_build  # noqa: E402
 import pcb_check  # noqa: E402
 import pcb_fab  # noqa: E402
 import pcb_route  # noqa: E402
+import spice_flow  # noqa: E402
 
 
 def resolve_spec(args: argparse.Namespace, output_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     overlay = ds.apply_defaults(ds.load_json(args.spec))
-    if args.netlist or args.schematic:
+    ltspice = getattr(args, "ltspice", None)
+    if ltspice:
+        pin_map = ds.load_json(args.pin_map) if getattr(args, "pin_map", None) else None
+        node_aliases = ds.load_json(args.node_aliases) if getattr(args, "node_aliases", None) else None
+        ask = getattr(args, "ask", None)
+        ask = True if ask is None else bool(ask)
+        host = "0.0.0.0" if getattr(args, "ask_mobile", False) else getattr(args, "ask_host", "127.0.0.1")
+        ask_dir = output_dir / overlay["name"] / "ask"
+        imported = spice_flow.resolve_ltspice(
+            overlay,
+            ltspice,
+            pin_map=pin_map,
+            node_aliases=node_aliases,
+            ask=ask,
+            ask_dir=ask_dir,
+            host=host,
+            port=getattr(args, "ask_port", 8765),
+            timeout=getattr(args, "ask_timeout", 1800),
+            open_browser=getattr(args, "ask_open", False),
+            fetch=not getattr(args, "ask_no_fetch", False),
+            footprints_dir=Path(args.footprints_dir) if getattr(args, "footprints_dir", None) else None,
+        )
+        spec = imported.spec
+        spec["netlist_source"] = str(ltspice)
+        for warning in imported.warnings:
+            print(f"WARN  [ltspice] {warning}", file=sys.stderr)
+        if imported.asked:
+            ask_dir.mkdir(parents=True, exist_ok=True)
+            ds.write_json(ask_dir / "pinmap.resolved.json", imported.pin_map)
+            ds.write_json(ask_dir / "aliases.resolved.json", imported.node_aliases)
+            print(f"[ask] answered: {', '.join(imported.asked)}", file=sys.stderr)
+            print(f"[ask] reusable pin map: {ask_dir / 'pinmap.resolved.json'}", file=sys.stderr)
+            print(f"[ask] reusable aliases: {ask_dir / 'aliases.resolved.json'}", file=sys.stderr)
+    elif args.netlist or args.schematic:
         if args.schematic:
             netlist_path = output_dir / f"{overlay['name']}.net"
             ds.export_netlist_from_schematic(args.schematic, netlist_path, kicad_cli=args.kicad_cli)
@@ -100,7 +139,18 @@ def resolve_backend(args: argparse.Namespace, stages: list[str]) -> tuple[str, d
         jar=args.freerouting_jar or None,
         kicad_cli=args.kicad_cli,
         spec=args.spec,
-        paths=[path for path in (args.schematic, args.netlist, args.board) if path],
+        paths=[
+            path
+            for path in (
+                args.schematic,
+                args.netlist,
+                getattr(args, "ltspice", None),
+                getattr(args, "pin_map", None),
+                getattr(args, "node_aliases", None),
+                args.board,
+            )
+            if path
+        ],
         workflow=args.ci_workflow,
     )
     if os.environ.get("GITHUB_ACTIONS") == "true":
@@ -164,8 +214,8 @@ def dispatch_ci(args: argparse.Namespace) -> int:
         print("NOTE: --kicad-cli is local-only; CI uses the container's kicad-cli", file=sys.stderr)
 
     inputs: dict[str, Any] = {}
-    for key in ("schematic", "netlist", "board"):
-        value = getattr(args, key)
+    for key in ("schematic", "netlist", "ltspice", "pin_map", "node_aliases", "board"):
+        value = getattr(args, key, None)
         if value:
             inputs[key] = value
     for key in ("skip_build", "skip_route", "skip_check", "skip_fab", "allow_unverified"):
@@ -334,11 +384,44 @@ def cmd_validate(args: argparse.Namespace) -> int:
     return 0 if findings.ok else 1
 
 
+def spice_ci_blocker(args: argparse.Namespace) -> str | None:
+    """Return a message when CI would need an interactive SPICE answer."""
+    ltspice = getattr(args, "ltspice", None)
+    if not ltspice:
+        return None
+    if getattr(args, "ask", None) is False:
+        return None
+    try:
+        overlay = ds.apply_defaults(ds.load_json(args.spec))
+        pin_map = ds.load_json(args.pin_map) if getattr(args, "pin_map", None) else None
+        node_aliases = ds.load_json(args.node_aliases) if getattr(args, "node_aliases", None) else None
+        missing = spice_flow.missing_inputs(
+            overlay, ltspice, pin_map=pin_map, node_aliases=node_aliases
+        )
+    except (ValueError, OSError) as exc:
+        return f"could not inspect the SPICE import: {exc}"
+    if not missing:
+        return None
+    return (
+        "CI cannot ask visual questions for a SPICE import.\n"
+        "Missing:\n"
+        + "\n".join(f"  - {item}" for item in missing)
+        + "\nRun locally with --ltspice to answer the questions, then either "
+        "use build/<name>/<name>.spec.json as a self-contained spec, or pass "
+        "the reusable pin map/aliases from build/<name>/ask/ with the original "
+        "overlay."
+    )
+
+
 def cmd_all(args: argparse.Namespace) -> int:
     stages_needed = requested_stages(args)
     backend, probe = resolve_backend(args, stages_needed)
     announce_backend(backend, probe, stages_needed)
     if backend == "ci":
+        blocker = spice_ci_blocker(args)
+        if blocker:
+            print(blocker, file=sys.stderr)
+            return 2
         return dispatch_ci(args)
 
     base_output = Path(args.output) if args.output else ROOT / "build"
@@ -496,8 +579,44 @@ def cmd_stage(args: argparse.Namespace) -> int:
 
 def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("spec", help="design spec JSON")
-    parser.add_argument("--netlist", help="KiCad .net netlist to merge")
-    parser.add_argument("--schematic", help="KiCad .kicad_sch to export a netlist from")
+    source = parser.add_mutually_exclusive_group()
+    source.add_argument("--netlist", help="KiCad .net netlist to merge")
+    source.add_argument("--schematic", help="KiCad .kicad_sch to export a netlist from")
+    source.add_argument("--ltspice", help="LTspice/SPICE .net or .cir netlist to import")
+    parser.add_argument("--pin-map", help="JSON pin map for LTspice multi-pin parts")
+    parser.add_argument("--node-aliases", help="JSON map of SPICE node names to PCB net names")
+    parser.add_argument(
+        "--ask",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "ask visual questions when a SPICE import needs pin maps, footprints "
+            "or placement (default: on)"
+        ),
+    )
+    parser.add_argument("--ask-host", default="127.0.0.1", help="visual question bind address")
+    parser.add_argument("--ask-port", type=int, default=8765, help="visual question port (0 picks a free port)")
+    parser.add_argument(
+        "--ask-timeout",
+        type=float,
+        default=1800,
+        help="seconds to wait for visual answers",
+    )
+    parser.add_argument(
+        "--ask-mobile",
+        action="store_true",
+        help="bind the visual question page to the LAN so a phone can open it",
+    )
+    parser.add_argument(
+        "--ask-open",
+        action="store_true",
+        help="open the visual question page in the local browser",
+    )
+    parser.add_argument(
+        "--ask-no-fetch",
+        action="store_true",
+        help="do not fetch footprint previews from the KiCad GitHub library",
+    )
     parser.add_argument("--board", help="existing .kicad_pcb; skips build")
     parser.add_argument("-o", "--output", help="output directory")
     parser.add_argument("--kicad-cli", default=os.environ.get("KICAD_CLI", "kicad-cli"))
@@ -535,11 +654,15 @@ def main(argv: list[str] | None = None) -> int:
         p = sub.add_parser(name)
         add_common(p)
     args = parser.parse_args(argv)
-    if args.command == "validate":
-        return cmd_validate(args)
-    if args.command == "all":
-        return cmd_all(args)
-    return cmd_stage(args)
+    try:
+        if args.command == "validate":
+            return cmd_validate(args)
+        if args.command == "all":
+            return cmd_all(args)
+        return cmd_stage(args)
+    except spice_flow.SpiceInputError as exc:
+        print(f"SPICE INPUT NEEDED:\n{exc}", file=sys.stderr)
+        return 2
 
 
 if __name__ == "__main__":

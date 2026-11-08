@@ -838,6 +838,7 @@ def parse_kicad_netlist(path: str | Path) -> dict[str, Any]:
         "components": list(components.values()),
         "nets": nets,
         "source": str(path),
+        "format": "kicad-netlist",
     }
 
 
@@ -853,25 +854,31 @@ def merge_netlist(overlay: dict[str, Any], netlist: dict[str, Any]) -> dict[str,
     spec = copy.deepcopy(overlay)
     overlay_by_ref = {comp.get("ref"): comp for comp in spec.get("components", [])}
     netlist_refs = {comp["ref"] for comp in netlist.get("components", [])}
+    excluded_refs = set(netlist.get("excluded", []))
 
     merged_components: list[dict[str, Any]] = []
     for comp in netlist.get("components", []):
         ref = comp["ref"]
         base = copy.deepcopy(overlay_by_ref.get(ref, {}))
+        # A SPICE netlist has no pad names. When the importer cannot derive
+        # them, keep pad->net assignments from the spec overlay instead of
+        # silently dropping them.
+        pads = comp.get("pads") or base.get("pads", {})
         base.update(
             {
                 "ref": ref,
                 "value": comp.get("value", base.get("value", "")),
                 "footprint": comp.get("footprint") or base.get("footprint", ""),
-                "pads": comp.get("pads", {}),
+                "pads": pads,
             }
         )
         merged_components.append(base)
     for ref, comp in overlay_by_ref.items():
         if ref not in netlist_refs:
             # Keep mechanical parts (mounting holes) that are intentionally
-            # absent from the schematic.
-            if comp.get("pads"):
+            # absent from the schematic, and parts the importer deliberately
+            # excluded (for example simulation-only sources).
+            if comp.get("pads") and ref not in excluded_refs:
                 raise ValueError(f"overlay component {ref} has pads but is missing from the netlist")
             merged_components.append(copy.deepcopy(comp))
     spec["components"] = merged_components
@@ -886,7 +893,491 @@ def merge_netlist(overlay: dict[str, Any], netlist: dict[str, Any]) -> dict[str,
         merged_nets.append(merged)
     spec["nets"] = merged_nets
     spec["netlist_source"] = netlist.get("source")
+    spec["import"] = {
+        "format": netlist.get("format", "kicad-netlist"),
+        "source": netlist.get("source"),
+        "warnings": list(netlist.get("warnings", [])),
+        "excluded": list(netlist.get("excluded", [])),
+    }
     return spec
+
+
+# ---------------------------------------------------------------------------
+# LTspice / SPICE netlist import
+# ---------------------------------------------------------------------------
+
+LTSPICE_SIMULATION_PREFIXES = ("V", "I", "B", "E", "F", "G", "H", "K", "S", "W", "T", "O", "U", "A")
+LTSPICE_SEMANTIC_PINS = {
+    "Q": ("c", "b", "e", "s"),
+    "M": ("d", "g", "s", "b"),
+    "J": ("d", "g", "s"),
+    "D": ("a", "k"),
+}
+LTSPICE_PIN_ALIASES = {
+    "anode": "a",
+    "cathode": "k",
+    "collector": "c",
+    "base": "b",
+    "emitter": "e",
+    "drain": "d",
+    "gate": "g",
+    "source": "s",
+    "bulk": "b",
+}
+LTSPICE_KNOWN_PREFIXES = set("RCLDQMJXVIBEFGHKSWTOUA")
+
+
+def _spice_logical_lines(text: str) -> list[str]:
+    """Join continuation lines and drop comments/blank lines."""
+    lines: list[str] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("*"):
+            continue
+        if line.startswith("+"):
+            if lines:
+                lines[-1] = f"{lines[-1]} {line[1:].strip()}"
+            continue
+        # LTspice uses ';' for inline comments.
+        if ";" in line:
+            line = line.split(";", 1)[0].strip()
+        if line:
+            lines.append(line)
+    return lines
+
+
+def _spice_pin_map_entry(pin_map: dict[str, Any], ref: str, prefix: str) -> Any:
+    refs = pin_map.get("refs") or {}
+    defaults = pin_map.get("defaults") or {}
+    if ref in refs:
+        return refs[ref]
+    if prefix in defaults:
+        return defaults[prefix]
+    if prefix.lower() in defaults:
+        return defaults[prefix.lower()]
+    return None
+
+
+def _spice_normalise_mapping(prefix: str, mapping: Any) -> Any:
+    if not isinstance(mapping, dict) or prefix == "X":
+        return mapping
+    normalised: dict[str, Any] = {}
+    for key, value in mapping.items():
+        key_str = str(key)
+        lowered = key_str.lower()
+        normalised[key_str if lowered.isdigit() else LTSPICE_PIN_ALIASES.get(lowered, lowered)] = value
+    return normalised
+
+
+def _spice_numeric_mapping(mapping: dict[str, Any]) -> list[str] | None:
+    keys = [str(key) for key in mapping]
+    if keys and all(key.isdigit() for key in keys):
+        return [str(mapping[key]) for key in sorted(mapping, key=lambda key: int(str(key)))]
+    return None
+
+
+def _spice_pad_values(value: Any) -> list[str]:
+    """Expand a pin-map value into one or more pad numbers."""
+    if isinstance(value, (list, tuple)):
+        pads = [str(pad).strip() for pad in value]
+    else:
+        pads = [str(value).strip()]
+    if not pads or any(not pad for pad in pads):
+        raise ValueError("pin map pad numbers must be non-empty")
+    return pads
+
+
+def _spice_assign_pad(pads: dict[str, str], pad: str, node: str, *, ref: str) -> None:
+    previous = pads.get(pad)
+    if previous is not None and previous != node:
+        raise ValueError(
+            f"{ref}: pad {pad} maps to both {previous!r} and {node!r}; use one pad per net"
+        )
+    pads[pad] = node
+
+
+def _spice_apply_mapping(
+    *,
+    prefix: str,
+    ref: str,
+    nodes: list[str],
+    mapping: Any,
+    subckt_pins: list[str] | None = None,
+) -> dict[str, str]:
+    """Return pad number -> SPICE node for one element.
+
+    A semantic pin (for example a SOT-223 collector or drain tab) may map to
+    more than one pad by using a list in the pin map.
+    """
+    if mapping is None:
+        if prefix in ("R", "C", "L", "D"):
+            if len(nodes) != 2:
+                raise ValueError(f"{ref}: expected 2 nodes for a {prefix} element, found {len(nodes)}")
+            return {"1": nodes[0], "2": nodes[1]}
+        pins = LTSPICE_SEMANTIC_PINS.get(prefix, ())
+        hint = ", ".join(pins) if pins else "pads"
+        example = (
+            '{"c": "2", "b": "1", "e": "3"}'
+            if prefix == "Q"
+            else '{"d": "3", "g": "1", "s": "2"}'
+            if prefix in ("M", "J")
+            else '["1", "2", "3", "4"]'
+        )
+        raise ValueError(
+            f"{ref}: no pin map for {len(nodes)}-node {prefix} element ({hint}). "
+            f'Add {{"refs": {{"{ref}": {example}}}}} to the pin map.'
+        )
+
+    if isinstance(mapping, (list, tuple)):
+        pads = [str(pad) for pad in mapping]
+        if len(pads) != len(nodes):
+            raise ValueError(f"{ref}: pin map has {len(pads)} pads but the netlist has {len(nodes)} nodes")
+        result: dict[str, str] = {}
+        for pad, node in zip(pads, nodes):
+            _spice_assign_pad(result, pad, node, ref=ref)
+        return result
+
+    if not isinstance(mapping, dict):
+        raise ValueError(f"{ref}: pin map entry must be a list or an object")
+
+    numeric = _spice_numeric_mapping(mapping)
+    if numeric is not None:
+        if len(numeric) != len(nodes):
+            raise ValueError(f"{ref}: pin map has {len(numeric)} pads but the netlist has {len(nodes)} nodes")
+        result = {}
+        for pad, node in zip(numeric, nodes):
+            _spice_assign_pad(result, pad, node, ref=ref)
+        return result
+
+    # X instances: keys are subcircuit port names, order comes from .subckt.
+    if prefix == "X":
+        if subckt_pins is None:
+            raise ValueError(
+                f"{ref}: a port-name pin map needs an inline .subckt definition; "
+                "use an ordered list of pad numbers instead"
+            )
+        if len(subckt_pins) != len(nodes):
+            raise ValueError(
+                f"{ref}: subcircuit has {len(subckt_pins)} pins but the netlist has {len(nodes)} nodes"
+            )
+        missing = [pin for pin in subckt_pins if pin not in mapping]
+        if missing:
+            raise ValueError(f"{ref}: pin map is missing subcircuit pin(s): {', '.join(missing)}")
+        pads: dict[str, str] = {}
+        for pin, node in zip(subckt_pins, nodes):
+            for pad in _spice_pad_values(mapping[pin]):
+                _spice_assign_pad(pads, pad, node, ref=ref)
+        return pads
+
+    order = LTSPICE_SEMANTIC_PINS.get(prefix)
+    if order is None:
+        raise ValueError(f"{ref}: unsupported pin map for {prefix} element")
+    unknown = [key for key in mapping if key not in order]
+    if unknown:
+        raise ValueError(
+            f"{ref}: unknown pin name(s) {', '.join(map(str, unknown))}; expected one of: {', '.join(order)}"
+        )
+    expected = [pin for pin in order if pin in mapping]
+    if not expected:
+        raise ValueError(f"{ref}: pin map keys must include one of: {', '.join(order)}")
+    if len(expected) != len(nodes):
+        raise ValueError(
+            f"{ref}: pin map names {len(expected)} pins ({', '.join(expected)}) "
+            f"but the netlist has {len(nodes)} nodes"
+        )
+    pads = {}
+    for pin, node in zip(expected, nodes):
+        for pad in _spice_pad_values(mapping[pin]):
+            _spice_assign_pad(pads, pad, node, ref=ref)
+    return pads
+
+
+def parse_ltspice_netlist(
+    path: str | Path,
+    pin_map: dict[str, Any] | None = None,
+    node_aliases: dict[str, str] | None = None,
+    *,
+    strict: bool = True,
+) -> dict[str, Any]:
+    """Parse an LTspice/SPICE netlist into the pipeline's netlist shape.
+
+    LTspice netlists carry no footprints and no pad numbers. Two-terminal
+    primitives default to pads 1/2; multi-pin primitives need an explicit
+    ``pin_map``. ``node_aliases`` maps SPICE node names (for example ``N001``
+    or ``0``) to meaningful PCB net names so netclasses and voltage rules
+    still apply.
+
+    Simulation-only elements (voltage/current sources, behavioral and
+    controlled sources, coupling, switches, transmission lines) are excluded
+    by default. Use ``pin_map.include`` to force one onto the board and
+    ``pin_map.exclude`` to drop anything else.
+
+    With ``strict=False``, elements that need a pin map are returned in the
+    ``unresolved`` list instead of raising. This lets the pipeline ask the user
+    for the missing pin maps and then parse again.
+    """
+    if pin_map is not None and not isinstance(pin_map, dict):
+        raise ValueError("pin_map must be a JSON object")
+    if node_aliases is not None and not isinstance(node_aliases, dict):
+        raise ValueError("node_aliases must be a JSON object")
+    pin_map = pin_map or {}
+    for key in ("refs", "defaults"):
+        if key in pin_map and not isinstance(pin_map[key], dict):
+            raise ValueError(f"pin_map.{key} must be a JSON object")
+    for key in ("include", "exclude"):
+        if key in pin_map and not isinstance(pin_map[key], list):
+            raise ValueError(f"pin_map.{key} must be a JSON array")
+    aliases = {str(key): str(value) for key, value in (node_aliases or {}).items()}
+
+    raw = Path(path).read_bytes()
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        # Some LTspice exports are UTF-16 LE/BE.
+        text = raw.decode("utf-16")
+    else:
+        try:
+            text = raw.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = raw.decode("latin-1")
+    lines = _spice_logical_lines(text)
+
+    # Inline .model names let us find the model token without guessing whether
+    # a BJT/MOSFET line has a fourth (substrate/bulk) node.
+    models: set[str] = set()
+    for line in lines:
+        if line.lower().startswith(".model"):
+            tokens = line.split()
+            if len(tokens) >= 2:
+                models.add(tokens[1].lower())
+
+    subckt_stack: list[str] = []
+    subckts: dict[str, list[str]] = {}
+    components: dict[str, dict[str, Any]] = {}
+    # Seed with user excludes so an overlay-only part (for example a connector
+    # that is not simulated) is marked as intentionally absent.
+    excluded: list[str] = [str(ref) for ref in pin_map.get("exclude", [])]
+    warnings: list[str] = []
+    unresolved: list[dict[str, Any]] = []
+    first_line = True
+    include_refs = {str(ref) for ref in pin_map.get("include", [])}
+    exclude_refs = {str(ref) for ref in pin_map.get("exclude", [])}
+
+    for line in lines:
+        lowered = line.lower()
+
+        if lowered.startswith(".subckt"):
+            first_line = False
+            tokens = line.split()
+            if len(tokens) < 2:
+                warnings.append(f"ignored malformed .subckt line: {line}")
+                continue
+            name = tokens[1]
+            pins: list[str] = []
+            for token in tokens[2:]:
+                if "=" in token or token.lower() in ("params:", "param:"):
+                    break
+                pins.append(token)
+            if not subckt_stack:
+                subckts[name] = pins
+            subckt_stack.append(name)
+            continue
+
+        if lowered.startswith(".ends"):
+            first_line = False
+            if subckt_stack:
+                subckt_stack.pop()
+            continue
+
+        if lowered.startswith(".include") or lowered.startswith(".lib"):
+            first_line = False
+            warnings.append(f"external include not resolved: {line}")
+            continue
+
+        if line.startswith("."):
+            first_line = False
+            continue
+
+        if subckt_stack:
+            continue
+
+        tokens = line.split()
+        name = tokens[0]
+        prefix = name[0].upper()
+        is_first = first_line
+        if prefix not in LTSPICE_KNOWN_PREFIXES:
+            if first_line:
+                # LTspice writes the schematic title as the first line.
+                first_line = False
+                continue
+            warnings.append(f"ignored unrecognised line: {line}")
+            continue
+        first_line = False
+
+        if name in exclude_refs:
+            if name not in excluded:
+                excluded.append(name)
+            continue
+        if prefix in LTSPICE_SIMULATION_PREFIXES and name not in include_refs:
+            if name not in excluded:
+                excluded.append(name)
+            continue
+
+        args = tokens[1:]
+        mapping = _spice_normalise_mapping(prefix, _spice_pin_map_entry(pin_map, name, prefix))
+
+        # Work out how many leading tokens are nodes.
+        numeric_mapping = _spice_numeric_mapping(mapping) if isinstance(mapping, dict) else None
+        if prefix == "X":
+            if isinstance(mapping, (list, tuple)):
+                node_count = len(mapping)
+            elif numeric_mapping is not None:
+                node_count = len(numeric_mapping)
+            elif isinstance(mapping, dict):
+                if not subckts:
+                    raise ValueError(
+                        f"{name}: a port-name pin map needs an inline .subckt definition"
+                    )
+                matches = [index for index, token in enumerate(args) if token in subckts]
+                if len(matches) != 1:
+                    raise ValueError(
+                        f"{name}: cannot identify the subcircuit name; use an ordered pad list "
+                        "in the pin map"
+                    )
+                node_count = matches[0]
+            else:
+                if not strict:
+                    matches = [token for token in args if token in subckts]
+                    subckt_name = matches[0] if len(matches) == 1 else None
+                    unresolved.append(
+                        {
+                            "ref": name,
+                            "prefix": "X",
+                            "args": list(args),
+                            "line": line,
+                            "subckt_name": subckt_name,
+                            "subckt_pins": subckts.get(subckt_name) if subckt_name else None,
+                        }
+                    )
+                    continue
+                raise ValueError(
+                    f"{name}: no pin map for X (subcircuit) element. "
+                    f'Add an ordered pad list, for example {{"refs": {{"{name}": ["1", "2", "3", "4"]}}}}.'
+                )
+            if len(args) <= node_count:
+                if not is_first:
+                    warnings.append(f"ignored malformed X instance (missing subcircuit name): {line}")
+                continue
+        elif isinstance(mapping, (list, tuple)):
+            node_count = len(mapping)
+        elif numeric_mapping is not None:
+            node_count = len(numeric_mapping)
+        elif prefix in ("R", "C", "L"):
+            node_count = 2
+        elif prefix == "D":
+            model_index = next((index for index in range(2, len(args)) if args[index].lower() in models), None)
+            node_count = model_index if model_index is not None else 2
+        elif prefix in ("Q", "M", "J"):
+            model_index = next((index for index in range(3, len(args)) if args[index].lower() in models), None)
+            if model_index is not None:
+                node_count = model_index
+            else:
+                bulk = "s" if prefix == "Q" else "b"
+                node_count = 4 if isinstance(mapping, dict) and bulk in mapping else 3
+        else:
+            node_count = 2
+
+        if len(args) < node_count:
+            if not is_first:
+                warnings.append(f"ignored malformed line: {line}")
+            continue
+        nodes = args[:node_count]
+        value_token = args[node_count] if len(args) > node_count else ""
+
+        subckt_name = None
+        subckt_pins = None
+        if prefix == "X":
+            if isinstance(mapping, (list, tuple)) or numeric_mapping is not None:
+                subckt_name = value_token
+            else:
+                matches = [token for token in args if token in subckts]
+                subckt_name = matches[0] if matches else None
+            if subckt_name in subckts:
+                subckt_pins = subckts[subckt_name]
+
+        # A multi-pin part with no pin map cannot be placed on a footprint yet.
+        # In tolerant mode, hand it back to the caller so the pipeline can ask
+        # the user for a pinout instead of failing the whole import.
+        needs_pin_map = mapping is None and (
+            prefix in ("Q", "M", "J")
+            or (prefix == "D" and len(nodes) != 2)
+        )
+        if needs_pin_map:
+            if not strict:
+                unresolved.append(
+                    {
+                        "ref": name,
+                        "prefix": prefix,
+                        "nodes": list(nodes),
+                        "value": value_token,
+                        "line": line,
+                    }
+                )
+                continue
+            # Strict mode falls through to _spice_apply_mapping for the
+            # detailed error message.
+
+        pads = _spice_apply_mapping(
+            prefix=prefix,
+            ref=name,
+            nodes=nodes,
+            mapping=mapping,
+            subckt_pins=subckt_pins,
+        )
+
+        if name in components:
+            raise ValueError(f"duplicate component reference in netlist: {name}")
+
+        pad_nets: dict[str, str] = {}
+        for pad, node in pads.items():
+            net_name = aliases.get(node, "GND" if node == "0" else node)
+            if not net_name or any(char.isspace() for char in net_name):
+                raise ValueError(
+                    f"{name} pad {pad} maps to invalid net name {net_name!r}; "
+                    "add a node_aliases entry"
+                )
+            pad_nets[str(pad)] = net_name
+
+        components[name] = {
+            "ref": name,
+            "value": subckt_name if prefix == "X" and subckt_name else value_token,
+            "footprint": "",
+            "pads": pad_nets,
+            "spice_prefix": prefix,
+        }
+
+    net_nodes: dict[str, list[dict[str, str]]] = {}
+    for comp in components.values():
+        for pad, net_name in comp["pads"].items():
+            net_nodes.setdefault(net_name, []).append({"ref": comp["ref"], "pin": pad})
+
+    def _node_key(node: dict[str, str]) -> tuple[str, int, str]:
+        pin = node["pin"]
+        return (node["ref"], int(pin) if pin.isdigit() else 10**9, pin)
+
+    nets = [
+        {"name": net_name, "nodes": sorted(nodes, key=_node_key)}
+        for net_name, nodes in sorted(net_nodes.items())
+    ]
+
+    return {
+        "components": list(components.values()),
+        "nets": nets,
+        "source": str(path),
+        "format": "ltspice",
+        "warnings": warnings,
+        "excluded": excluded,
+        "unresolved": unresolved,
+        "subcircuits": subckts,
+    }
 
 
 def export_netlist_from_schematic(schematic: str | Path, output: str | Path, kicad_cli: str = "kicad-cli") -> Path:
@@ -942,6 +1433,22 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("-o", "--output", required=True)
     s.add_argument("--kicad-cli", default=os.environ.get("KICAD_CLI", "kicad-cli"))
 
+    l = sub.add_parser(
+        "ltspice",
+        help="import an LTspice/SPICE netlist, then merge it",
+        description=(
+            "Import an LTspice/SPICE netlist. This low-level command is "
+            "non-interactive; use design_pipeline.py --ltspice for visual "
+            "pin-map, footprint and placement questions."
+        ),
+    )
+    l.add_argument("netlist")
+    l.add_argument("--spec", required=True, help="overlay spec with board/rules/placement")
+    l.add_argument("-o", "--output", required=True)
+    l.add_argument("--pin-map", help="JSON pin map for multi-pin parts")
+    l.add_argument("--node-aliases", help="JSON map of SPICE node names to PCB net names")
+    l.add_argument("--validate", action="store_true")
+
     args = parser.parse_args(argv)
 
     if args.command == "validate":
@@ -986,18 +1493,25 @@ def main(argv: list[str] | None = None) -> int:
         _print_findings(findings)
         return 0 if findings.ok else 1
 
-    if args.command in ("netlist", "schematic"):
-        netlist_path = args.netlist if args.command == "netlist" else None
-        if args.command == "schematic":
-            netlist_path = str(Path(args.output).with_suffix(".net"))
-            export_netlist_from_schematic(args.schematic, netlist_path, kicad_cli=args.kicad_cli)
+    if args.command in ("netlist", "schematic", "ltspice"):
         overlay = apply_defaults(load_json(args.spec))
-        netlist = parse_kicad_netlist(netlist_path)
+        if args.command == "ltspice":
+            pin_map = load_json(args.pin_map) if args.pin_map else None
+            node_aliases = load_json(args.node_aliases) if args.node_aliases else None
+            netlist = parse_ltspice_netlist(args.netlist, pin_map=pin_map, node_aliases=node_aliases)
+            for warning in netlist.get("warnings", []):
+                print(f"WARN  [ltspice] {warning}", file=sys.stderr)
+        else:
+            netlist_path = args.netlist if args.command == "netlist" else None
+            if args.command == "schematic":
+                netlist_path = str(Path(args.output).with_suffix(".net"))
+                export_netlist_from_schematic(args.schematic, netlist_path, kicad_cli=args.kicad_cli)
+            netlist = parse_kicad_netlist(netlist_path)
         merged = apply_defaults(derive_nets(merge_netlist(overlay, netlist)))
         profile = load_profile(str(merged.get("profile", "")))
         findings = validate_spec(merged, profile)
         _print_findings(findings)
-        if not findings.ok and args.validate:
+        if not findings.ok and getattr(args, "validate", False):
             return 1
         write_json(args.output, merged)
         print(f"wrote {args.output}")

@@ -442,6 +442,7 @@ def build_spec_payload(
     *,
     only_missing: bool = False,
     extra_options: list[str] | None = None,
+    categories: dict[str, str | None] | None = None,
     title: str | None = None,
     intro: str | None = None,
 ) -> dict[str, Any]:
@@ -450,6 +451,10 @@ def build_spec_payload(
     The current footprint is offered first, followed by the built-in catalog for
     the inferred package family. Components whose family is unknown get a text
     question instead, so the user can type an exact ``Library:Footprint``.
+
+    ``categories`` overrides the inferred family by reference. This is useful
+    for a SPICE import, where a ref such as ``Q1`` has no footprint yet but the
+    SPICE prefix still tells us it is a transistor.
     """
     components = spec.get("components")
     if not isinstance(components, list) or not components:
@@ -467,7 +472,10 @@ def build_spec_payload(
         if only_missing and current:
             continue
         value = str(component.get("value") or "").strip()
-        category = infer_category(current)
+        if categories is not None and ref in categories:
+            category = categories[ref]
+        else:
+            category = infer_category(current)
         catalog = list(footprint_preview.COMMON_FOOTPRINTS.get(category, [])) if category else []
         choices: list[dict[str, Any]] = []
         seen: set[str] = set()
@@ -918,7 +926,13 @@ def _ask_parser(subparsers: Any) -> argparse.ArgumentParser:
     parser.add_argument("--from-spec", metavar="SPEC", help="ask for footprints for every component in a design spec")
     parser.add_argument("--only-missing", action="store_true", help="with --from-spec, only ask about components with no footprint")
     parser.add_argument("--footprint-for", metavar="REF", help="build a one-question footprint payload for REF")
-    parser.add_argument("--category", help="common footprint category (resistor, capacitor, led, header, sot, soic, qfp, qfn, dip)")
+    parser.add_argument(
+        "--category",
+        help=(
+            "common footprint category (resistor, capacitor, led, header, sot, "
+            "soic, qfp, qfn, dip, inductor, diode, ic)"
+        ),
+    )
     parser.add_argument("--option", action="append", default=[], metavar="FOOTPRINT", help="extra footprint candidate (repeatable)")
     parser.add_argument("--title", help="override the page title")
     parser.add_argument("--intro", help="override the page introduction")
