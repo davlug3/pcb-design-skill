@@ -3,7 +3,7 @@
 
 This stage needs:
   * pcbnew (KiCad 9 Python bindings) for DSN export / SES import
-  * Java 17+ and a Freerouting jar for the autorouter
+  * Java 25+ and a Freerouting 2.5.0 jar for the autorouter
 
 It is intentionally a thin, auditable bridge. Freerouting is a mature
 autorouter, but it is not an impedance or EMC sign-off tool; the pipeline
@@ -107,9 +107,35 @@ def find_java() -> str:
     if java:
         return java
     raise RuntimeError(
-        "Java not found. Install Java 17+ (Termux: pkg install openjdk-17; "
-        "Debian: apt install default-jre) or run routing in CI where Java is available."
+        "Java not found. Install Java 25+ (Termux: pkg install openjdk-25; "
+        "Debian: install a current JDK) or run routing in CI where Java is available."
     )
+
+
+def freerouting_command(
+    java: str,
+    jar: Path,
+    dsn: Path,
+    ses: Path,
+    *,
+    passes: int,
+    threads: int,
+    optimize: bool,
+) -> list[str]:
+    """Build a pinned Freerouting 2.5 command using canonical setting names."""
+    return [
+        java,
+        "-jar",
+        str(jar),
+        "-de",
+        str(dsn),
+        "-do",
+        str(ses),
+        f"--router.autorouter.max_passes={passes}",
+        f"--router.optimizer.max_threads={threads}",
+        f"--router.optimizer.enabled={'true' if optimize else 'false'}",
+        "--gui.enabled=false",
+    ]
 
 
 def run_freerouting(
@@ -126,20 +152,15 @@ def run_freerouting(
     if not jar.is_file():
         raise RuntimeError(f"Freerouting jar not found: {jar}")
     java = find_java()
-    cmd = [
+    cmd = freerouting_command(
         java,
-        "-jar",
-        str(jar),
-        "-de",
-        str(dsn),
-        "-do",
-        str(ses),
-        "-mp",
-        str(passes),
-        "-mt",
-        str(threads),
-        "--gui.enabled=false",
-    ]
+        jar,
+        dsn,
+        ses,
+        passes=passes,
+        threads=threads,
+        optimize=optimize,
+    )
     started = time.time()
     with open(log_path, "w", encoding="utf-8") as log:
         log.write("$ " + " ".join(cmd) + "\n")

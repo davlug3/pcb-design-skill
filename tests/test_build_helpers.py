@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import design_spec as ds  # noqa: E402
 import pcb_build  # noqa: E402
 import pcb_fab  # noqa: E402
+import pcb_route  # noqa: E402
 
 
 def spec() -> dict:
@@ -197,6 +198,24 @@ class FabOutputTests(unittest.TestCase):
             ipc_step = next(item for item in result["steps"] if item["step"] == "ipc356")
             self.assertTrue(ipc_step["required"])
             self.assertFalse(ipc_step["ok"])
+
+
+class FreeroutingCommandTests(unittest.TestCase):
+    def test_canonical_freerouting_25_flags(self) -> None:
+        cmd = pcb_route.freerouting_command(
+            "/opt/jre25/bin/java",
+            Path("freerouting.jar"),
+            Path("board.dsn"),
+            Path("board.ses"),
+            passes=150,
+            threads=4,
+            optimize=True,
+        )
+        self.assertIn("--router.autorouter.max_passes=150", cmd)
+        self.assertIn("--router.optimizer.max_threads=4", cmd)
+        self.assertIn("--router.optimizer.enabled=true", cmd)
+        self.assertIn("--gui.enabled=false", cmd)
+        self.assertNotIn("-mp", cmd)
 
 
 class DrcParserTests(unittest.TestCase):
