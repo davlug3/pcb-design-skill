@@ -236,8 +236,12 @@ def route(
         raise RuntimeError("routing did not produce a candidate board")
     shutil.copy2(best_path, board_path)
     fill_zones(board_path)
-    # The final board save can rewrite project defaults; restore the spec rules
-    # before DRC reads the project.
+    # pcbnew rewrites generator metadata and the project on every save. Stamp
+    # the final board and restore the spec rules before DRC reads them.
+    try:
+        pcb_build.stamp_generator(board_path, "2.0")
+    except OSError:
+        pass
     try:
         pcb_build.write_project(spec, output_dir)
     except Exception:

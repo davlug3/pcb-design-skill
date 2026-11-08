@@ -144,7 +144,10 @@ def board_dfm(spec: dict[str, Any], board_path: Path) -> dict[str, Any]:
         is_via = hasattr(track, "GetDrillValue")
         if is_via:
             try:
-                diameter = track.GetWidth() / 1_000_000.0
+                try:
+                    diameter = track.GetWidth(pcbnew.F_Cu) / 1_000_000.0
+                except Exception:
+                    diameter = track.GetWidth() / 1_000_000.0
                 drill = track.GetDrillValue() / 1_000_000.0
                 if diameter + 1e-9 < min_via:
                     findings.error("dfm.via_diameter", f"via diameter {diameter:.3f} mm is below {min_via:.3f} mm")
@@ -308,8 +311,13 @@ def gate_all(
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     # The spec is authoritative for netclasses and minimum rules. Rewrite the
-    # project immediately before DRC so pcbnew cannot leave defaults behind.
+    # project and stamp the generator immediately before DRC so pcbnew cannot
+    # leave defaults behind.
     pcb_build.write_project(spec, board_path.parent)
+    try:
+        pcb_build.stamp_generator(board_path)
+    except OSError:
+        pass
     structural = structural_check(board_path)
     drc = run_drc(board_path, output_dir, kicad_cli=kicad_cli)
     dfm = board_dfm(spec, board_path)

@@ -238,16 +238,28 @@ def replace_stackup(text: str, new_block: str) -> str:
     return text[:insert_at] + "\n" + new_block + text[insert_at:]
 
 
+def stamp_generator(path: Path, version: str | None = None) -> None:
+    """Mark a board as generated/processed by this pipeline.
+
+    pcbnew always writes ``(generator "pcbnew")`` after a save. The strict
+    structural checker flags that as a third-party file, so stamp the marker
+    after every pcbnew save. An existing board keeps its generator_version
+    unless a version is supplied.
+    """
+    text = path.read_text(encoding="utf-8")
+    text = re.sub(r'\(generator\s+"[^"]*"\)', '(generator "pcb-design-skill")', text, count=1)
+    if version:
+        text = re.sub(r'\(generator_version\s+"[^"]*"\)', f'(generator_version "{version}")', text, count=1)
+    path.write_text(text, encoding="utf-8")
+
+
 def patch_board_file(path: Path, spec: dict[str, Any]) -> None:
     text = path.read_text(encoding="utf-8")
     thickness = float(spec["board"].get("thickness_mm", 1.6))
     text = re.sub(r"\(thickness\s+[0-9.]+\)", f"(thickness {thickness:.6g})", text, count=1)
-    # pcbnew stamps itself as the generator. Identify this pipeline instead so
-    # the strict structural checker does not flag a third-party pcbnew file.
-    text = re.sub(r'\(generator\s+"[^"]*"\)', '(generator "pcb-design-skill")', text, count=1)
-    text = re.sub(r'\(generator_version\s+"[^"]*"\)', '(generator_version "2.0")', text, count=1)
     text = replace_stackup(text, stackup_block(spec))
     path.write_text(text, encoding="utf-8")
+    stamp_generator(path, "2.0")
 
 
 def write_project(spec: dict[str, Any], output_dir: Path) -> Path:
