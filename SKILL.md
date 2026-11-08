@@ -72,10 +72,10 @@ python3 scripts/env_probe.py                        # what can this machine run?
 python3 scripts/env_probe.py --json                 # machine-readable probe
 python3 scripts/design_pipeline.py all specs/led-blinky.json                     # auto
 python3 scripts/design_pipeline.py all specs/led-blinky.json --backend local
-python3 scripts/design_pipeline.py all specs/led-blinky.json --backend ci --ci-watch --ci-download build/ci
+python3 scripts/design_pipeline.py all specs/led-blinky.json --backend ci --ci-download build/ci
 ```
 
-CI dispatch is conservative: it refuses a dirty tree or a branch ahead of its upstream, because Actions checks out the pushed revision and would otherwise design the wrong board. Commit and push the spec, profiles, schemas, scripts and workflow first. `gh` must be installed and authenticated (`pkg install gh`, then `gh auth login`). Use `--ci-repo owner/name` only when dispatching a repository other than the current one.
+CI dispatch is conservative: it refuses a dirty tree or a branch ahead of its upstream, because Actions checks out the pushed revision and would otherwise design the wrong board. Commit and push the spec, profiles, schemas, scripts and workflow first. `gh` must be installed and authenticated (`pkg install gh`, then `gh auth login`). Use `--ci-repo owner/name` only when dispatching a repository other than the current one. CI runs are watched by default so the exit code reflects `professional_claim`; add `--no-ci-watch` to return immediately after dispatch.
 
 Stage commands (`build`, `route`, `check`, `fab`) run locally because CI cannot see uncommitted stage files; use `all --backend ci` for an end-to-end CI run. Inside GitHub Actions the pipeline always stays local, so a CI run never re-dispatches itself.
 

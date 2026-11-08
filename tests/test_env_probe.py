@@ -59,7 +59,7 @@ def pipeline_args(**overrides) -> argparse.Namespace:
         "ci_repo": None,
         "ci_workflow": "design.yml",
         "ci_ref": None,
-        "ci_watch": False,
+        "ci_watch": True,
         "ci_download": None,
         "ci_timeout": 3600,
         "json": False,
@@ -174,6 +174,63 @@ class DispatchTests(unittest.TestCase):
             (root / "specs" / "board.json").write_text("{}", encoding="utf-8")
             self.assertEqual(env_probe.repo_relative(root, "specs/board.json", root), "specs/board.json")
             self.assertIsNone(env_probe.repo_relative(root, "/etc/passwd", root))
+
+
+class PipelineDispatchTests(unittest.TestCase):
+    """CI runs are gates by default, not fire-and-forget dispatch calls."""
+
+    @staticmethod
+    def result(*, exit_code: int = 0) -> dict:
+        return {
+            "run_id": "1",
+            "url": "https://example.invalid/run/1",
+            "conclusion": "success" if exit_code == 0 else "failure",
+            "exit_code": exit_code,
+            "downloaded": None,
+            "workflow": "design.yml",
+            "ref": "main",
+            "spec": "specs/led-blinky.json",
+        }
+
+    def test_ci_dispatch_waits_by_default(self) -> None:
+        with mock.patch.object(
+            design_pipeline.ci_dispatch, "dispatch", return_value=self.result()
+        ) as dispatch:
+            code = design_pipeline.dispatch_ci(pipeline_args(backend="ci"))
+        self.assertEqual(code, 0)
+        self.assertTrue(dispatch.call_args.kwargs["watch"])
+
+    def test_no_ci_watch_returns_after_dispatch(self) -> None:
+        with mock.patch.object(
+            design_pipeline.ci_dispatch, "dispatch", return_value=self.result(exit_code=1)
+        ) as dispatch:
+            code = design_pipeline.dispatch_ci(pipeline_args(backend="ci", ci_watch=False))
+        self.assertEqual(code, 1)
+        self.assertFalse(dispatch.call_args.kwargs["watch"])
+
+    def test_download_rejects_no_watch(self) -> None:
+        with mock.patch.object(design_pipeline.ci_dispatch, "dispatch") as dispatch:
+            code = design_pipeline.dispatch_ci(
+                pipeline_args(backend="ci", ci_watch=False, ci_download="build/ci")
+            )
+        self.assertEqual(code, 2)
+        dispatch.assert_not_called()
+
+
+class CiDispatchResultTests(unittest.TestCase):
+    def test_fire_and_forget_already_failed_returns_nonzero(self) -> None:
+        info = {"root": str(ROOT), "branch": "main", "upstream": "origin/main", "remote": "origin"}
+        run = {"databaseId": 1, "url": "https://example.invalid/run/1", "conclusion": "failure"}
+        proc = mock.Mock(returncode=0, stdout="", stderr="")
+        with mock.patch.object(ci_dispatch.shutil, "which", return_value="/usr/bin/gh"), mock.patch.object(
+            ci_dispatch.env_probe, "probe_git", return_value=info
+        ), mock.patch.object(ci_dispatch, "_run", return_value=proc), mock.patch.object(
+            ci_dispatch, "find_run", return_value=run
+        ):
+            result = ci_dispatch.dispatch(
+                "specs/led-blinky.json", repo="owner/repo", watch=False, cwd=ROOT
+            )
+        self.assertEqual(result["exit_code"], 1)
 
 
 class CiBlockerTests(unittest.TestCase):

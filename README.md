@@ -75,7 +75,8 @@ python3 scripts/design_pipeline.py all specs/led-blinky.json
 # Inspect the probe or force a backend
 python3 scripts/env_probe.py
 python3 scripts/design_pipeline.py all specs/led-blinky.json --backend local
-python3 scripts/design_pipeline.py all specs/led-blinky.json --backend ci --ci-watch
+python3 scripts/design_pipeline.py all specs/led-blinky.json --backend ci
+# CI waits by default; add --no-ci-watch to return after dispatch
 ```
 
 Outputs land in `build/led-blinky/`:
@@ -148,7 +149,7 @@ kicad-cli pcb export ipcd356 -o board-ipc356.net board.kicad_pcb
 3. **Artifacts** — `design-output` (board, project, route logs, check results, fabrication package) and `design-report`.
 4. The job fails if `professional_claim` is false, so a broken/unrouted/DRC-failing board cannot silently merge.
 
-`design_pipeline.py --backend auto` dispatches this workflow when the local machine cannot run the pcbnew stages (for example Termux). A manual **Run workflow** dispatch accepts a `spec` input plus optional `schematic`, `netlist`, `board`, `skip_*` and `allow_unverified` inputs. CI dispatch requires `gh`, an authenticated session, and a clean branch that is not ahead of its upstream; otherwise the pipeline refuses to dispatch rather than designing the wrong revision.
+`design_pipeline.py --backend auto` dispatches this workflow when the local machine cannot run the pcbnew stages (for example Termux). A manual **Run workflow** dispatch accepts a `spec` input plus optional `schematic`, `netlist`, `board`, `skip_*` and `allow_unverified` inputs. CI dispatch requires `gh`, an authenticated session, and a clean branch that is not ahead of its upstream; otherwise the pipeline refuses to dispatch rather than designing the wrong revision. By default the pipeline waits for the CI run and returns its gate result, so its exit code still means "professional claim passed"; `--no-ci-watch` returns immediately after dispatch.
 
 ```bash
 python3 scripts/ci_dispatch.py --spec specs/led-blinky.json

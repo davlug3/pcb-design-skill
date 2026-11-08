@@ -214,6 +214,9 @@ def dispatch(
 
     conclusion = run.get("conclusion")
     exit_code = 0
+    if not watch and conclusion and conclusion != "success":
+        # Fire-and-forget still reports a run that already finished badly.
+        exit_code = 1
     if watch:
         watch_proc = _run(
             [

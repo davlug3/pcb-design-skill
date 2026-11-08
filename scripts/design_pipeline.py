@@ -14,9 +14,10 @@ Examples:
     # otherwise dispatch GitHub Actions (requires gh + a pushed branch)
     python3 scripts/design_pipeline.py all specs/led-blinky.json
 
-    # Force a backend
+    # Force a backend. CI dispatch waits for the run and returns its gate result;
+    # pass --no-ci-watch to return immediately after dispatch.
     python3 scripts/design_pipeline.py all specs/led-blinky.json --backend local
-    python3 scripts/design_pipeline.py all specs/led-blinky.json --backend ci --ci-watch
+    python3 scripts/design_pipeline.py all specs/led-blinky.json --backend ci
 
     # Validate the intent only, no KiCad required
     python3 scripts/design_pipeline.py validate specs/led-blinky.json
@@ -170,6 +171,10 @@ def dispatch_ci(args: argparse.Namespace) -> int:
     for key in ("skip_build", "skip_route", "skip_check", "skip_fab", "allow_unverified"):
         if getattr(args, key):
             inputs[key] = True
+
+    if args.ci_download and not args.ci_watch:
+        print("--ci-download requires waiting for the CI run; remove --no-ci-watch", file=sys.stderr)
+        return 2
 
     try:
         result = ci_dispatch.dispatch(
@@ -512,8 +517,13 @@ def add_common(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--ci-repo", help="owner/name for CI dispatch (default: current git remote)")
     parser.add_argument("--ci-workflow", default=os.environ.get("PCB_CI_WORKFLOW", "design.yml"))
     parser.add_argument("--ci-ref", help="branch for CI dispatch (default: current branch)")
-    parser.add_argument("--ci-watch", action="store_true", help="wait for the CI run to finish")
-    parser.add_argument("--ci-download", help="download CI artifacts here (implies --ci-watch)")
+    parser.add_argument(
+        "--ci-watch",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="wait for the CI run and return its gate result (default; --no-ci-watch returns after dispatch)",
+    )
+    parser.add_argument("--ci-download", help="download CI artifacts here (implies watching)")
     parser.add_argument("--ci-timeout", type=int, default=3600, help="CI watch timeout in seconds")
     parser.add_argument("--json", action="store_true")
 

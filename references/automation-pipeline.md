@@ -217,12 +217,14 @@ Debian default (Java 17).
 python3 scripts/env_probe.py
 python3 scripts/design_pipeline.py all specs/board.json                  # auto
 python3 scripts/design_pipeline.py all specs/board.json --backend local
-python3 scripts/design_pipeline.py all specs/board.json --backend ci --ci-watch
+python3 scripts/design_pipeline.py all specs/board.json --backend ci
 ```
 
 CI dispatch refuses to run from a dirty working tree or an unpushed branch,
 because Actions checks out the pushed revision. Commit and push the spec,
-profiles, schemas, scripts and workflow first. Stage commands
+profiles, schemas, scripts and workflow first. CI runs are watched by default,
+so the command's exit code is the workflow's gate result; `--no-ci-watch`
+returns after dispatch, and `--ci-download DIR` implies watching. Stage commands
 (`build`/`route`/`check`/`fab`) are local-only: CI cannot see uncommitted stage
 files, so use `all --backend ci` for an end-to-end run. Inside Actions the
 pipeline forces the local backend so it can never dispatch itself recursively.
