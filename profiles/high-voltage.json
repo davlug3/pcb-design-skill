@@ -1,0 +1,47 @@
+{
+  "name": "high-voltage",
+  "description": "Mains, high-voltage or safety-isolated boards. The pipeline enforces the stated creepage/clearance rules and DRC, but safety isolation and regulatory compliance require qualified human sign-off.",
+  "layers": {
+    "min": 1,
+    "max": 8
+  },
+  "automation": "gated",
+  "gates": {
+    "structural": "error",
+    "drc": "error",
+    "unconnected": "zero",
+    "dfm": "error",
+    "netlist_parity": "error",
+    "fab": "error",
+    "stackup": "required",
+    "impedance": "off",
+    "length_match": "off",
+    "thermal": "report",
+    "emc": "report",
+    "rf": "off",
+    "safety": "human",
+    "mechanical": "off"
+  },
+  "human_signoff": [
+    "safety",
+    "creepage"
+  ],
+  "routing": {
+    "autorouter": "freerouting",
+    "max_passes": 100,
+    "threads": 4,
+    "attempts": 2
+  },
+  "fab_outputs": [
+    "gerbers",
+    "drill",
+    "pos",
+    "step",
+    "ipc356"
+  ],
+  "notes": [
+    "Creepage and clearance must be derived from the applicable standard, pollution degree, altitude and coating.",
+    "Autorouting high-voltage nets is prohibited unless the router is constrained by verified clearance rules; review every clearance.",
+    "The pipeline does not certify safety, isolation or regulatory compliance."
+  ]
+}

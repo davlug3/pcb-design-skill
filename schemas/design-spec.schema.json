@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/davlug3/pcb-design-skill/schemas/design-spec.schema.json",
+  "title": "PCB Design Spec v1",
+  "description": "Canonical, tool-independent description of a PCB design. The design pipeline turns this into a KiCad 9 board, routes it, runs professional gates, and exports fabrication data.",
+  "type": "object",
+  "required": ["version", "name", "profile", "board", "rules", "components"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": {"type": "string"},
+    "version": {"const": 1},
+    "name": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
+      "description": "Output basename. Lower-case kebab-case is recommended."
+    },
+    "profile": {
+      "type": "string",
+      "description": "Board-class profile in profiles/<name>.json. Selects rules, gates, and required sign-offs."
+    },
+    "title": {"type": "string"},
+    "revision": {"type": "string"},
+    "board": {
+      "type": "object",
+      "required": ["width_mm", "height_mm", "layers"],
+      "additionalProperties": false,
+      "properties": {
+        "width_mm": {"type": "number", "exclusiveMinimum": 0},
+        "height_mm": {"type": "number", "exclusiveMinimum": 0},
+        "layers": {"type": "integer", "minimum": 1, "maximum": 32},
+        "thickness_mm": {"type": "number", "exclusiveMinimum": 0, "default": 1.6},
+        "copper_oz": {"type": "number", "exclusiveMinimum": 0, "default": 1},
+        "material": {"type": "string", "default": "FR4"},
+        "surface_finish": {
+          "type": "string",
+          "enum": ["HASL", "HASL-LF", "ENIG", "ENEPIG", "OSP", "Immersion Silver", "Immersion Tin", "Hard Gold", "None"],
+          "default": "HASL-LF"
+        },
+        "mask_color": {"type": "string", "default": "green"},
+        "silkscreen_color": {"type": "string", "default": "white"},
+        "edge_radius_mm": {"type": "number", "minimum": 0, "default": 0},
+        "stackup": {
+          "type": "object",
+          "description": "Required for impedance-controlled profiles. Copper and dielectric layers in physical order.",
+          "required": ["layers"],
+          "additionalProperties": false,
+          "properties": {
+            "source": {"type": "string", "description": "Vendor stackup datasheet/reference."},
+            "confirmed": {"type": "boolean", "default": false},
+            "layers": {
+              "type": "array",
+              "minItems": 3,
+              "items": {
+                "type": "object",
+                "required": ["type", "thickness_mm"],
+                "additionalProperties": false,
+                "properties": {
+                  "type": {"enum": ["copper", "dielectric"]},
+                  "name": {"type": "string"},
+                  "thickness_mm": {"type": "number", "exclusiveMinimum": 0},
+                  "material": {"type": "string"},
+                  "er": {"type": "number", "exclusiveMinimum": 0},
+                  "loss_tangent": {"type": "number", "minimum": 0}
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "rules": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min_track_width_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.2},
+        "min_clearance_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.2},
+        "min_via_diameter_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.6},
+        "min_via_drill_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.3},
+        "min_hole_diameter_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.3},
+        "min_annular_ring_mm": {"type": "number", "minimum": 0, "default": 0.15},
+        "edge_clearance_mm": {"type": "number", "minimum": 0, "default": 0.5},
+        "min_silk_width_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.15},
+        "min_mask_sliver_mm": {"type": "number", "minimum": 0, "default": 0.1},
+        "min_hole_to_hole_mm": {"type": "number", "minimum": 0, "default": 0.5}
+      }
+    },
+    "netclasses": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "track_width_mm": {"type": "number", "exclusiveMinimum": 0},
+          "clearance_mm": {"type": "number", "exclusiveMinimum": 0},
+          "via_diameter_mm": {"type": "number", "exclusiveMinimum": 0},
+          "via_drill_mm": {"type": "number", "exclusiveMinimum": 0},
+          "layer": {"type": "string", "description": "Copper layer the impedance target applies to, e.g. F.Cu or In1.Cu."},
+          "impedance_ohm": {"type": "number", "exclusiveMinimum": 0},
+          "impedance_tolerance_pct": {"type": "number", "exclusiveMinimum": 0, "default": 10},
+          "diff_pair": {"type": "boolean", "default": false},
+          "diff_pair_gap_mm": {"type": "number", "exclusiveMinimum": 0},
+          "length_match_mm": {"type": "number", "minimum": 0}
+        }
+      }
+    },
+    "nets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "class": {"type": "string"},
+          "voltage_v": {"type": "number", "minimum": 0},
+          "current_a": {"type": "number", "minimum": 0},
+          "impedance_ohm": {"type": "number", "exclusiveMinimum": 0},
+          "diff_pair": {"type": "string", "description": "Companion net name for a differential pair."},
+          "notes": {"type": "string"}
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["ref", "footprint"],
+        "additionalProperties": false,
+        "properties": {
+          "ref": {"type": "string", "minLength": 1},
+          "value": {"type": "string", "default": ""},
+          "footprint": {
+            "type": "string",
+            "description": "KiCad library id 'Library:Footprint' or a path to a .kicad_mod file."
+          },
+          "at": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "x_mm": {"type": "number"},
+              "y_mm": {"type": "number"},
+              "rotation_deg": {"type": "number", "default": 0},
+              "side": {"enum": ["front", "back"], "default": "front"}
+            }
+          },
+          "pads": {
+            "type": "object",
+            "description": "Pad number -> net name. Required unless a netlist/schematic is supplied.",
+            "additionalProperties": {"type": "string"}
+          },
+          "dnp": {"type": "boolean", "default": false},
+          "properties": {"type": "object", "additionalProperties": {"type": "string"}}
+        }
+      }
+    },
+    "placement": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {"enum": ["fixed", "auto"], "default": "fixed"},
+        "margin_mm": {"type": "number", "minimum": 0, "default": 2.0},
+        "grid_mm": {"type": "number", "exclusiveMinimum": 0, "default": 2.54},
+        "clearance_mm": {"type": "number", "minimum": 0, "default": 1.0},
+        "keepouts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["x_mm", "y_mm", "width_mm", "height_mm"],
+            "additionalProperties": false,
+            "properties": {
+              "x_mm": {"type": "number"},
+              "y_mm": {"type": "number"},
+              "width_mm": {"type": "number", "exclusiveMinimum": 0},
+              "height_mm": {"type": "number", "exclusiveMinimum": 0},
+              "reason": {"type": "string"}
+            }
+          }
+        }
+      }
+    },
+    "routing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {"enum": ["freerouting", "none"], "default": "freerouting"},
+        "max_passes": {"type": "integer", "minimum": 1, "default": 100},
+        "threads": {"type": "integer", "minimum": 1, "default": 4},
+        "timeout_s": {"type": "integer", "minimum": 30, "default": 900},
+        "attempts": {"type": "integer", "minimum": 1, "default": 3},
+        "optimize": {"type": "boolean", "default": true}
+      }
+    },
+    "zones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["net", "layer"],
+        "additionalProperties": false,
+        "properties": {
+          "net": {"type": "string"},
+          "layer": {"type": "string"},
+          "clearance_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.3},
+          "min_thickness_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.25},
+          "keepout": {"type": "boolean", "default": false}
+        }
+      }
+    },
+    "fabrication": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vendor": {"type": "string", "default": "generic"},
+        "capabilities": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "min_track_mm": {"type": "number", "exclusiveMinimum": 0},
+            "min_clearance_mm": {"type": "number", "exclusiveMinimum": 0},
+            "min_via_diameter_mm": {"type": "number", "exclusiveMinimum": 0},
+            "min_via_drill_mm": {"type": "number", "exclusiveMinimum": 0},
+            "min_annular_ring_mm": {"type": "number", "minimum": 0},
+            "min_hole_to_hole_mm": {"type": "number", "minimum": 0},
+            "max_width_mm": {"type": "number", "exclusiveMinimum": 0},
+            "max_height_mm": {"type": "number", "exclusiveMinimum": 0},
+            "max_layers": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    },
+    "signoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "completed": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Profile human_signoff items that a qualified reviewer has completed."
+        },
+        "reviewer": {"type": "string"},
+        "date": {"type": "string"},
+        "notes": {"type": "string"}
+      }
+    },
+    "assumptions": {
+      "type": "array",
+      "items": {"type": "string"}
+    }
+  }
+}

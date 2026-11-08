@@ -1,6 +1,6 @@
 ---
 name: pcb-design-skill
-description: Design and generate manufacturable KiCad printed circuit board (PCB) files (.kicad_pcb). Use when creating or editing PCB layouts, placing footprints, routing tracks and vias, defining board outlines, nets, copper zones or planes, or producing DRC-ready KiCad 8/9 s-expression output and Gerbers. Covers netlist modeling, stackup, DFM/DFA rules, and structural validation.
+description: Design, generate, automatically route, validate, and export manufacturable KiCad 9 printed circuit boards from a design spec, netlist, schematic, or existing board. Use when creating or editing PCB layouts, placing real library footprints, routing with Freerouting, defining stackups and nets, running KiCad DRC/DFM, or producing Gerbers and a professional release report. Covers automatic design, controlled-impedance/RF/flex/high-voltage gates, and structural validation.
 license: MIT
 ---
 
@@ -17,6 +17,50 @@ Create manufacturable, syntactically valid KiCad PCB files and output them as `.
 3. **Connectivity is geometric.** A track with the right net number that does not touch a pad or another track is still unrouted.
 4. **No silent electrical guesses.** Pin-to-net mapping, polarity, footprint choice and safety spacing must be stated as assumptions or asked about.
 5. **Do not claim fabrication compliance without verified fab limits.** Manufacturing numbers are stackup- and vendor-specific.
+6. **No release claim without a passing report.** A board is release-ready only when `report/design-report.json` says `professional_claim: true`. Otherwise list the failed gates and missing sign-offs.
+
+## Automatic Design Pipeline (preferred for new boards)
+
+Do not hand-author a release board when this pipeline can do it. The pipeline turns a **design spec** into a board with real KiCad library footprints, routes it with **Freerouting**, runs **KiCad DRC + DFM + netlist parity**, exports Gerbers/drill/position/STEP, and writes a gate report. Use hand-authoring only to review or patch a generated board.
+
+```bash
+# 1. Validate intent (no KiCad needed)
+python3 scripts/design_spec.py validate specs/led-blinky.json
+
+# 2. Full automatic design. Needs KiCad 9 pcbnew, Java 25 and Freerouting 2.5.0.
+python3 scripts/design_pipeline.py all specs/led-blinky.json
+
+# Electrical source of truth is a schematic or netlist; the spec supplies mechanics/rules.
+python3 scripts/design_pipeline.py all specs/led-blinky.json --schematic design.kicad_sch
+python3 scripts/design_pipeline.py all specs/led-blinky.json --netlist design.net
+
+# Existing board: route/check/export without rebuilding.
+python3 scripts/design_pipeline.py all specs/led-blinky.json --board existing.kicad_pcb --skip-build
+
+# Stages only
+python3 scripts/design_pipeline.py build specs/led-blinky.json -o build/led-blinky
+python3 scripts/design_pipeline.py route build/led-blinky/led-blinky.kicad_pcb --spec specs/led-blinky.json
+python3 scripts/design_pipeline.py check build/led-blinky/led-blinky.kicad_pcb --spec specs/led-blinky.json -o build/led-blinky/check
+python3 scripts/design_pipeline.py fab   build/led-blinky/led-blinky.kicad_pcb --spec specs/led-blinky.json -o build/led-blinky/fab
+```
+
+**Canonical inputs.** `specs/<name>.json` is the source of truth for the automatic path. Use `schemas/design-spec.schema.json` and `specs/led-blinky.json` as the model. For a natural-language request, write the spec first, state assumptions in `assumptions[]`, then run the pipeline. For a KiCad schematic/netlist, the netlist is authoritative for components/pad nets; the spec overlay supplies board size, stackup, rules, placement and routing.
+
+**Board-class profiles.** The profile selects the rule envelope and the release gates:
+
+| Profile | Automation | Required human sign-off |
+|---|---|---|
+| `2layer-low-speed` | Full: build, place, route, DRC, DFM, fab | none |
+| `4layer-impedance` / `6layer-impedance` | Gated: stackup + impedance + length-match checks | `stackup`, `impedance` |
+| `rf-mixed-signal` | Assisted; RF nets should be re-routed by hand | `rf`, `emc`, `thermal` |
+| `flex-rigid` | Assisted | `mechanical`, `flex_bend`, `assembly` |
+| `high-voltage` | Gated; clearance/creepage checks | `safety`, `creepage` |
+
+`professional_claim` is true only when every hard gate passes **and** every required sign-off is listed in `signoff.completed`. RF, EMC, thermal, safety and flex fatigue cannot be certified by the pipeline; say so instead of overclaiming. Record a reviewer in `signoff.reviewer`.
+
+**Where to run it.** Full automation needs `pcbnew` (KiCad 9 Python), `kicad-cli`, Java 25 and `freerouting-2.5.0.jar` (Freerouting 2.5.0 is built for Java 25). On a machine without KiCad, push the spec and use `.github/workflows/design.yml`: it runs in the official `kicad/kicad:9.0` container, installs a JRE 25, downloads Freerouting, runs the whole pipeline, and uploads `design-output` + `design-report`. Termux users can install `openjdk-25`; a native KiCad install is still required for pcbnew, so CI is the recommended arm64 path.
+
+**Iteration rule.** When a gate fails, change the spec (placement, width, clearance, stackup, class assignment) and regenerate. Do not edit a generated board and then claim the report applies; the report records the exact resolved spec (`<name>.spec.json`).
 
 ## Retrieval Sources (use before guessing)
 
@@ -43,11 +87,23 @@ The developer docs lag the application in places (they still describe pre-v7 `(w
 | `assets/minimal-2layer.kicad_pcb` | Validator-clean blank 2-layer board (copy this as a starting point) |
 | `assets/example-led.kicad_pcb` | Validator-clean routed example: THT header, SMD resistor/LED, vias, courtyard, mounting hole |
 | `assets/example.kicad_dru` | Custom-rule examples (netclass width, high-voltage clearance) |
+| `schemas/design-spec.schema.json` | Canonical automatic-design spec (board, rules, nets, placement, stackup, gates) |
+| `profiles/*.json` | Board-class rule envelopes and release gates |
+| `specs/led-blinky.json` | Reference spec for the automatic pipeline |
+| `scripts/design_spec.py` | Dependency-free spec validator, netlist importer, impedance/current calculations, gate report |
+| `scripts/pcb_build.py` | Spec → KiCad board using real library footprints (pcbnew) |
+| `scripts/pcb_route.py` | DSN export → Freerouting → SES import → zone fill |
+| `scripts/pcb_check.py` | Structural, DRC, DFM, netlist-parity and length-match gates |
+| `scripts/pcb_fab.py` | Gerbers, drill, position, STEP, IPC-356 and fabrication README |
+| `scripts/design_pipeline.py` | Orchestrates the whole automatic design and writes the release report |
 | `scripts/check_pcb.py` | Dependency-free structural/geometry pre-flight checker |
+| `.github/workflows/design.yml` | CI: build, route, DRC/DFM, fab export and report in the KiCad 9 container |
 
 Use the search terms in these references before fetching a whole doc page: `version`, `generator_version`, `layers`, `stackup`, `setup`, `net`, `footprint`, `property`, `attr`, `pad`, `stroke`, `segment`, `via`, `zone`, `keepout`, `filled_polygon`, `Edge.Cuts`, `embedded_fonts`, `remove_unused_layers`, `courtyard`, `impedance`, `differential`, `3W`, `return path`, `DFM`, `trace width`.
 
-## Workflow
+## Manual / Review Workflow
+
+Use the automatic pipeline first. This workflow is for reviewing a generated board, patching a design whose spec cannot express a constraint, or working in an environment where the pipeline tools are unavailable.
 
 1. **Clarify design intent (do not guess silently on critical constraints).**
    - Board function, components, connectors, power/ground nets, target size and mechanical constraints.
@@ -86,6 +142,7 @@ Use the search terms in these references before fetching a whole doc page: `vers
    - `(fill yes ...)` declares intent only; KiCad must **refill zones** before Gerber output. A file without `filled_polygon` is valid but visually/electrically unfilled until refill.
 
 7. **Validate before delivering (mandatory).**
+   - For a generated board, run `python3 scripts/design_pipeline.py check <board> --spec <spec> -o check/`. It runs the structural checker, KiCad DRC, DFM, netlist parity and length matching and writes `check.json`.
    - Run `python3 scripts/check_pcb.py --strict <board>.kicad_pcb`. It checks syntax, header, nets, layers, UUIDs, pads, tracks, outline closure, zones and dangling endpoints.
    - If KiCad is installed, run the authoritative DRC and exports:
      ```bash
@@ -99,9 +156,9 @@ Use the search terms in these references before fetching a whole doc page: `vers
    - Fix every error and justify or fix every warning. Do not deliver a board that fails `--strict` without saying why.
 
 8. **Output.**
-   - Write the complete `.kicad_pcb` file (and `.kicad_dru`/`.kicad_pro` only if rules/netclasses are required).
+   - Write the complete `.kicad_pcb` file (and `.kicad_dru`/`.kicad_pro` only if rules/netclasses are required). For an automatic run, the deliverable is the generated board plus `report/design-report.json`, `report/design-report.md` and the fabrication package.
    - Summarize assumptions: layer count, stackup, copper weight, current/trace sizing, impedance/diff-pair constraints, fab limits, and what was not verified.
-   - List the checks run and the checks the user still needs (KiCad DRC, zone refill, 3D/clearance, impedance/stackup, fab DFM/DFA).
+   - List the checks run and the checks the user still needs. If `professional_claim` is false, list every failure and missing sign-off; do not present the board as release-ready.
 
 ## Minimal skeleton (KiCad 9)
 
@@ -151,13 +208,30 @@ The full working version is `assets/minimal-2layer.kicad_pcb`. The required shap
 - Guessing complex footprint pad geometry from memory instead of using a library/datasheet.
 - Claiming electrical correctness, impedance or manufacturability without assumptions and KiCad DRC/DFM checks.
 
-## Scope: When Not to Hand-Generate
+## Scope and Professional Honesty
 
-Hand-writing s-expressions is appropriate for small/medium boards, simple footprints and scripted prototypes. For dense BGA escape routing, impedance-critical RF/high-speed, flex/rigid, or large designs, use KiCad's GUI or the Python/IPC API to place real library footprints and let KiCad compute connectivity, fills and DRC. Say so rather than emitting a fragile approximation.
+The automatic pipeline is designed to produce **professional, DRC-validated, fab-ready boards** for supported profiles, not to pretend that every electrical/mechanical property is solved. The hard gates (structural, DRC, unconnected, DFM, netlist parity, length match) are automated. The profile decides which properties additionally require qualified human sign-off.
+
+- `2layer-low-speed`: full automatic release is possible when the report says `professional_claim: true`.
+- Controlled impedance: the pipeline computes geometry from the stated stackup and gates the result, but the fabricator's stackup and coupon must be confirmed; sign-off is still required.
+- RF/mixed-signal: Freerouting is not acceptable for impedance-critical RF paths. Treat the route as a draft, re-route RF nets by hand, and obtain RF/EMC/thermal sign-off.
+- Flex/rigid-flex: bend radius, coverlay, stiffeners, assembly and fatigue life are outside the pipeline; mechanical sign-off is required.
+- High voltage: the pipeline applies the stated clearance/creepage rules and DRC, but safety isolation and regulatory compliance require a qualified reviewer.
+- Dense BGA escape, very large boards, and designs with constraints the spec cannot express: use KiCad's GUI or IPC API, and say so rather than emitting a fragile approximation.
+
+Never describe a design as professional, fabrication-ready, impedance-controlled, RF-verified, safe or compliant unless the report supports that exact claim.
 
 ## Validation Commands
 
 ```bash
+# Spec validation (no KiCad required)
+python3 scripts/design_spec.py validate specs/board.json
+python3 scripts/design_spec.py explain specs/board.json
+python3 -m unittest discover -s tests -v
+
+# Automatic design: build, route, DRC/DFM, fab, report
+python3 scripts/design_pipeline.py all specs/led-blinky.json
+
 # Structural/geometry pre-flight (no KiCad required)
 python3 scripts/check_pcb.py board.kicad_pcb
 python3 scripts/check_pcb.py --strict board.kicad_pcb
@@ -166,4 +240,11 @@ python3 scripts/check_pcb.py --strict board.kicad_pcb
 kicad-cli pcb drc --severity-all --exit-code-violations board.kicad_pcb
 kicad-cli pcb export gerbers -o gerbers/ board.kicad_pcb
 kicad-cli pcb export drill -o gerbers/ board.kicad_pcb
+```
+
+**Freerouting 2.5.0 requires Java 25+.** It is intentionally not committed (62 MB). Download it next to the scripts or set `FREEROUTING_JAR`:
+
+```bash
+curl -fL -o scripts/freerouting.jar \
+  https://github.com/freerouting/freerouting/releases/download/v2.5.0/freerouting-2.5.0.jar
 ```

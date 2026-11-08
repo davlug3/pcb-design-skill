@@ -1,0 +1,367 @@
+#!/usr/bin/env python3
+"""Professional automatic PCB design pipeline.
+
+One command from a design spec to a validated fabrication package:
+
+    validate -> build -> route (Freerouting) -> DRC/DFM -> export -> report
+
+The pipeline refuses a "professional" claim when a hard gate fails or a
+required human sign-off is missing. That is intentional: automatic routing is
+not a substitute for RF, EMC, thermal, safety or flex sign-off.
+
+Examples:
+    # Full local run (KiCad python + Java + Freerouting jar present)
+    python3 scripts/design_pipeline.py all specs/led-blinky.json
+
+    # Validate the intent only, no KiCad required
+    python3 scripts/design_pipeline.py validate specs/led-blinky.json
+
+    # Route an existing board, then run the gates
+    python3 scripts/design_pipeline.py all specs/led-blinky.json \
+        --board existing.kicad_pcb --skip-build
+
+    # Import a KiCad schematic as the electrical source of truth
+    python3 scripts/design_pipeline.py all specs/led-blinky.json \
+        --schematic design.kicad_sch
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+ROOT = SCRIPT_DIR.parent
+sys.path.insert(0, str(SCRIPT_DIR))
+import design_spec as ds  # noqa: E402
+import pcb_build  # noqa: E402
+import pcb_check  # noqa: E402
+import pcb_fab  # noqa: E402
+import pcb_route  # noqa: E402
+
+
+def resolve_spec(args: argparse.Namespace, output_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
+    overlay = ds.apply_defaults(ds.load_json(args.spec))
+    if args.netlist or args.schematic:
+        if args.schematic:
+            netlist_path = output_dir / f"{overlay['name']}.net"
+            ds.export_netlist_from_schematic(args.schematic, netlist_path, kicad_cli=args.kicad_cli)
+        else:
+            netlist_path = Path(args.netlist)
+        netlist = ds.parse_kicad_netlist(netlist_path)
+        spec = ds.merge_netlist(overlay, netlist)
+        spec["netlist_source"] = str(netlist_path)
+    else:
+        spec = overlay
+    spec = ds.apply_defaults(ds.derive_nets(spec))
+    profile = ds.load_profile(str(spec["profile"]))
+    return spec, profile
+
+
+def stackup_gate(spec: dict[str, Any], profile: dict[str, Any]) -> int:
+    gate = profile.get("gates", {}).get("stackup")
+    if gate in (None, "off"):
+        return 0
+    stackup = spec.get("board", {}).get("stackup")
+    if not stackup:
+        return 1
+    findings = ds.validate_stackup(spec, stackup)
+    return 0 if findings.ok else max(1, len(findings.errors))
+
+
+def impedance_gate(spec: dict[str, Any]) -> tuple[int, list[dict[str, Any]]]:
+    results: list[dict[str, Any]] = []
+    failures = 0
+    for cls_name, cls in spec.get("netclasses", {}).items():
+        if not cls.get("impedance_ohm"):
+            continue
+        computed = ds.impedance_for_netclass(spec, cls_name)
+        target = float(cls["impedance_ohm"])
+        tolerance = float(cls.get("impedance_tolerance_pct", 10))
+        for item in computed:
+            item = dict(item)
+            item["netclass"] = cls_name
+            item["pass"] = target * (1 - tolerance / 100) <= item["z0_ohm"] <= target * (1 + tolerance / 100)
+            if not item["pass"]:
+                failures += 1
+            results.append(item)
+    return failures, results
+
+
+def report_markdown(report: dict[str, Any], extra: dict[str, Any]) -> str:
+    status = "PROFESSIONAL - RELEASE GATES PASSED" if report["professional_claim"] else "NOT RELEASED - GATES INCOMPLETE"
+    lines = [
+        f"# {report['name']} rev {report.get('revision', 'A')}",
+        "",
+        f"**Status: {status}**",
+        "",
+        f"- Profile: `{report['profile']}` ({report['automation']})",
+        f"- Failures: {', '.join(report['failures']) if report['failures'] else 'none'}",
+        f"- Required human sign-off: {', '.join(report['required_signoff']) or 'none'}",
+        f"- Completed sign-off: {', '.join(report['completed_signoff']) or 'none'}",
+        "",
+        "## Automated gates",
+        "",
+        "| Gate | Result |",
+        "|---|---|",
+    ]
+    for key, value in report.get("automated", {}).items():
+        if isinstance(value, dict):
+            value = json.dumps(value, sort_keys=True)
+        lines.append(f"| {key} | {value} |")
+    if extra.get("check"):
+        drc = extra["check"].get("drc", {})
+        lines.extend(
+            [
+                "",
+                "## DRC",
+                "",
+                f"- Errors: {drc.get('violations', 'unknown')}",
+                f"- Unconnected: {drc.get('unconnected', 'unknown')}",
+                f"- Report: `{drc.get('report', '')}`",
+            ]
+        )
+    if extra.get("impedance"):
+        lines.extend(["", "## Impedance", "", "| Netclass | Layer | Kind | Width (mm) | Z0 (ohm) | Target (ohm) | Pass |", "|---|---|---|---:|---:|---:|---|"])
+        for item in extra["impedance"]:
+            lines.append(
+                f"| {item.get('netclass')} | {item.get('layer')} | {item.get('kind')} | {item.get('width_mm')} | "
+                f"{item.get('z0_ohm')} | {item.get('target_ohm')} | {'yes' if item.get('pass') else 'NO'} |"
+            )
+    if extra.get("length_match"):
+        lines.extend(["", "## Routed lengths", ""])
+        for net, length in sorted(extra["length_match"].get("lengths_mm", {}).items()):
+            lines.append(f"- {net}: {length} mm")
+    if report.get("findings", {}).get("warnings"):
+        lines.extend(["", "## Warnings", ""])
+        for item in report["findings"]["warnings"]:
+            lines.append(f"- `{item['code']}` {item['message']}")
+    if report.get("findings", {}).get("errors"):
+        lines.extend(["", "## Errors", ""])
+        for item in report["findings"]["errors"]:
+            lines.append(f"- `{item['code']}` {item['message']}")
+    if report.get("assumptions"):
+        lines.extend(["", "## Assumptions", ""])
+        for item in report["assumptions"]:
+            lines.append(f"- {item}")
+    if extra.get("fab"):
+        lines.extend(
+            [
+                "",
+                "## Fabrication package",
+                "",
+                f"- Archive: `{extra['fab'].get('archive')}`",
+                f"- Gerbers: `{extra['fab'].get('gerbers')}`",
+                f"- Drill: `{extra['fab'].get('drill')}`",
+                f"- Position: `{extra['fab'].get('pos')}`",
+            ]
+        )
+    lines.extend(["", "---", "", report.get("disclaimer", ""), ""])
+    return "\n".join(lines)
+
+
+def write_report(report: dict[str, Any], extra: dict[str, Any], output_dir: Path) -> tuple[Path, Path]:
+    report_dir = output_dir / "report"
+    report_dir.mkdir(parents=True, exist_ok=True)
+    json_path = report_dir / "design-report.json"
+    md_path = report_dir / "design-report.md"
+    payload = dict(report)
+    payload["artifacts"] = extra
+    ds.write_json(json_path, payload)
+    md = report_markdown(report, extra)
+    md_path.write_text(md, encoding="utf-8")
+    summary = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary:
+        with open(summary, "a", encoding="utf-8") as fh:
+            fh.write(md + "\n")
+    return json_path, md_path
+
+
+def cmd_validate(args: argparse.Namespace) -> int:
+    spec, profile = resolve_spec(args, Path(args.output) if args.output else ROOT / "build")
+    findings = ds.validate_spec(spec, profile)
+    for item in findings.errors:
+        print(f"ERROR [{item['code']}] {item['message']}", file=sys.stderr)
+    for item in findings.warnings:
+        print(f"WARN  [{item['code']}] {item['message']}", file=sys.stderr)
+    print(f"{len(findings.errors)} error(s), {len(findings.warnings)} warning(s)")
+    return 0 if findings.ok else 1
+
+
+def cmd_all(args: argparse.Namespace) -> int:
+    base_output = Path(args.output) if args.output else ROOT / "build"
+    started = time.time()
+    spec, profile = resolve_spec(args, base_output)
+    output_dir = base_output if args.output else base_output / spec["name"]
+    output_dir.mkdir(parents=True, exist_ok=True)
+    resolved_spec_path = output_dir / f"{spec['name']}.spec.json"
+    ds.write_json(resolved_spec_path, spec)
+
+    findings = ds.validate_spec(spec, profile)
+    for item in findings.errors:
+        print(f"ERROR [{item['code']}] {item['message']}", file=sys.stderr)
+    if not findings.ok:
+        report = ds.gate_report(spec, profile, findings, {})
+        extra = {"spec": str(resolved_spec_path), "findings_only": True}
+        write_report(report, extra, output_dir)
+        return 1
+
+    board_path = Path(args.board) if args.board else output_dir / f"{spec['name']}.kicad_pcb"
+    stages: dict[str, Any] = {}
+    extra: dict[str, Any] = {"spec": str(resolved_spec_path)}
+
+    if not args.board and not args.skip_build:
+        print(f"[build] {board_path}")
+        try:
+            built = pcb_build.build(
+                spec,
+                output_dir,
+                Path(args.footprints_dir) if args.footprints_dir else None,
+            )
+        except Exception as exc:
+            print(f"BUILD FAILED: {exc}", file=sys.stderr)
+            report = ds.gate_report(spec, profile, findings, {"structural": "build_failed"})
+            write_report(report, extra, output_dir)
+            return 1
+        board_path = Path(built)
+        extra["board"] = str(board_path)
+        extra["project"] = str(output_dir / f"{spec['name']}.kicad_pro")
+    else:
+        extra["board"] = str(board_path)
+
+    if not board_path.is_file():
+        print(f"BOARD NOT FOUND: {board_path}", file=sys.stderr)
+        return 1
+
+    if not args.skip_route and spec.get("routing", {}).get("mode", "freerouting") != "none":
+        jar = Path(args.freerouting_jar or os.environ.get("FREEROUTING_JAR", SCRIPT_DIR / "freerouting.jar"))
+        if not jar.is_file():
+            message = (
+                f"Freerouting jar not found: {jar}. Download v2.5.0 with:\n"
+                f"  curl -fL -o {jar} https://github.com/freerouting/freerouting/releases/download/v2.5.0/freerouting-2.5.0.jar"
+            )
+            print("ROUTE SKIPPED: " + message, file=sys.stderr)
+            if not args.allow_unverified:
+                stages["routing"] = "missing"
+        else:
+            print(f"[route] {board_path}")
+            try:
+                route_result = pcb_route.route(spec, board_path, output_dir, freerouting_jar=jar)
+                extra["routing"] = route_result
+                stages["unconnected"] = route_result.get("unconnected", 0)
+            except Exception as exc:
+                print(f"ROUTE FAILED: {exc}", file=sys.stderr)
+                stages["routing"] = "failed"
+    else:
+        stages["unconnected"] = "not_routed"
+
+    if not args.skip_check:
+        print(f"[check] {board_path}")
+        check = pcb_check.gate_all(spec, board_path, output_dir / "check", kicad_cli=args.kicad_cli)
+        check["drc"].pop("report_text", None)
+        extra["check"] = check
+        stages["structural"] = 0 if check["structural"]["ok"] else 1
+        stages["drc"] = 0 if check["drc"]["ok"] else max(1, int(check["drc"].get("violations", 1)))
+        stages["unconnected"] = int(check["drc"].get("unconnected", 0))
+        stages["dfm"] = 0 if check["dfm"]["ok"] else max(1, len(check["dfm"].get("errors", [])))
+        stages["netlist_parity"] = 0 if check["netlist_parity"]["ok"] else max(1, len(check["netlist_parity"].get("errors", [])))
+        stages["length_match"] = 0 if check["length_match"]["ok"] else max(1, len(check["length_match"].get("errors", [])))
+        extra["length_match"] = check["length_match"]
+
+    stages["stackup"] = stackup_gate(spec, profile)
+    impedance_failures, impedance_results = impedance_gate(spec)
+    stages["impedance"] = impedance_failures
+    extra["impedance"] = impedance_results
+    stages["thermal"] = "reported"
+    stages["emc"] = "not_verified"
+
+    if not args.skip_fab:
+        print(f"[fab] {board_path}")
+        try:
+            fab = pcb_fab.export_fab(spec, board_path, output_dir / "fab", kicad_cli=args.kicad_cli)
+            extra["fab"] = fab
+            stages["fab"] = 0 if fab["ok"] else 1
+        except Exception as exc:
+            print(f"FAB FAILED: {exc}", file=sys.stderr)
+            stages["fab"] = 1
+
+    report = ds.gate_report(spec, profile, findings, stages)
+    report["elapsed_s"] = round(time.time() - started, 1)
+    report["stages"] = stages
+    json_path, md_path = write_report(report, extra, output_dir)
+    print(f"[report] {md_path}")
+    if report["professional_claim"]:
+        print("PROFESSIONAL CLAIM: PASS")
+        return 0
+    print("PROFESSIONAL CLAIM: FAIL - " + ", ".join(report["failures"]))
+    return 0 if args.allow_unverified else 1
+
+
+def cmd_stage(args: argparse.Namespace) -> int:
+    spec, profile = resolve_spec(args, Path(args.output) if args.output else ROOT / "build")
+    findings = ds.validate_spec(spec, profile)
+    if not findings.ok:
+        for item in findings.errors:
+            print(f"ERROR [{item['code']}] {item['message']}", file=sys.stderr)
+        return 1
+    output_dir = Path(args.output) if args.output else ROOT / "build" / spec["name"]
+    if args.command == "build":
+        print(pcb_build.build(spec, output_dir, Path(args.footprints_dir) if args.footprints_dir else None))
+        return 0
+    board = Path(args.board) if args.board else output_dir / f"{spec['name']}.kicad_pcb"
+    if args.command == "route":
+        jar = Path(args.freerouting_jar or os.environ.get("FREEROUTING_JAR", SCRIPT_DIR / "freerouting.jar"))
+        result = pcb_route.route(spec, board, output_dir, freerouting_jar=jar)
+        print(json.dumps(result, indent=2) if args.json else f"routed: {result.get('tracks')} tracks")
+        return 0 if result.get("unconnected") == 0 else 1
+    if args.command == "check":
+        result = pcb_check.gate_all(spec, board, output_dir / "check", kicad_cli=args.kicad_cli)
+        print(json.dumps(result, indent=2) if args.json else f"check ok={result['ok']}")
+        return 0 if result["ok"] else 1
+    if args.command == "fab":
+        result = pcb_fab.export_fab(spec, board, output_dir / "fab", kicad_cli=args.kicad_cli)
+        print(result["archive"])
+        return 0 if result["ok"] else 1
+    return 2
+
+
+def add_common(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("spec", help="design spec JSON")
+    parser.add_argument("--netlist", help="KiCad .net netlist to merge")
+    parser.add_argument("--schematic", help="KiCad .kicad_sch to export a netlist from")
+    parser.add_argument("--board", help="existing .kicad_pcb; skips build")
+    parser.add_argument("-o", "--output", help="output directory")
+    parser.add_argument("--kicad-cli", default=os.environ.get("KICAD_CLI", "kicad-cli"))
+    parser.add_argument("--footprints-dir", help="KiCad footprints root")
+    parser.add_argument("--freerouting-jar", default=os.environ.get("FREEROUTING_JAR", ""))
+    parser.add_argument("--skip-build", action="store_true")
+    parser.add_argument("--skip-route", action="store_true")
+    parser.add_argument("--skip-check", action="store_true")
+    parser.add_argument("--skip-fab", action="store_true")
+    parser.add_argument("--allow-unverified", action="store_true", help="exit 0 even without a professional claim")
+    parser.add_argument("--json", action="store_true")
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="Professional automatic PCB design pipeline.")
+    sub = parser.add_subparsers(dest="command", required=True)
+    for name in ("validate", "build", "route", "check", "fab", "all"):
+        p = sub.add_parser(name)
+        add_common(p)
+    args = parser.parse_args(argv)
+    if args.command == "validate":
+        return cmd_validate(args)
+    if args.command == "all":
+        return cmd_all(args)
+    return cmd_stage(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

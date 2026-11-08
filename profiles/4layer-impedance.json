@@ -1,0 +1,47 @@
+{
+  "name": "4layer-impedance",
+  "description": "Rigid FR4, four copper layers with controlled impedance. The pipeline builds the stackup, checks impedance and length matching, routes, runs DRC/DFM, and requires qualified stackup/impedance sign-off before a professional claim.",
+  "layers": {
+    "min": 4,
+    "max": 4
+  },
+  "automation": "gated",
+  "gates": {
+    "structural": "error",
+    "drc": "error",
+    "unconnected": "zero",
+    "dfm": "error",
+    "netlist_parity": "error",
+    "fab": "error",
+    "stackup": "required",
+    "impedance": "computed",
+    "length_match": "computed",
+    "thermal": "report",
+    "emc": "report",
+    "rf": "off",
+    "safety": "off",
+    "mechanical": "off"
+  },
+  "human_signoff": [
+    "stackup",
+    "impedance"
+  ],
+  "routing": {
+    "autorouter": "freerouting",
+    "max_passes": 150,
+    "threads": 4,
+    "attempts": 4
+  },
+  "fab_outputs": [
+    "gerbers",
+    "drill",
+    "pos",
+    "step",
+    "ipc356"
+  ],
+  "notes": [
+    "The stackup must come from a real fabricator and be marked confirmed before sign-off.",
+    "Freerouting does not guarantee impedance; the pipeline computes geometry from the stated stackup and gates on the result.",
+    "Length matching is reported per netclass; verify the target against the interface timing budget."
+  ]
+}

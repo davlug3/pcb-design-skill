@@ -1,0 +1,47 @@
+{
+  "name": "6layer-impedance",
+  "description": "Rigid FR4, six copper layers with controlled impedance and length matching. Same gates as 4-layer with a deeper stackup and stricter review.",
+  "layers": {
+    "min": 6,
+    "max": 6
+  },
+  "automation": "gated",
+  "gates": {
+    "structural": "error",
+    "drc": "error",
+    "unconnected": "zero",
+    "dfm": "error",
+    "netlist_parity": "error",
+    "fab": "error",
+    "stackup": "required",
+    "impedance": "computed",
+    "length_match": "computed",
+    "thermal": "report",
+    "emc": "report",
+    "rf": "off",
+    "safety": "off",
+    "mechanical": "off"
+  },
+  "human_signoff": [
+    "stackup",
+    "impedance"
+  ],
+  "routing": {
+    "autorouter": "freerouting",
+    "max_passes": 200,
+    "threads": 4,
+    "attempts": 4
+  },
+  "fab_outputs": [
+    "gerbers",
+    "drill",
+    "pos",
+    "step",
+    "ipc356"
+  ],
+  "notes": [
+    "Use at least one continuous reference plane per high-speed signal layer.",
+    "The stackup must be confirmed by the fabricator; generic FR4 numbers are not a professional sign-off.",
+    "Confirm layer transitions, return vias and plane splits before release."
+  ]
+}

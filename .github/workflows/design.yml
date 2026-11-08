@@ -1,0 +1,124 @@
+name: Design pipeline
+
+on:
+  push:
+    paths:
+      - "specs/**"
+      - "profiles/**"
+      - "schemas/**"
+      - "scripts/**"
+      - ".github/workflows/design.yml"
+  pull_request:
+    paths:
+      - "specs/**"
+      - "profiles/**"
+      - "schemas/**"
+      - "scripts/**"
+      - ".github/workflows/design.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  spec:
+    name: Spec validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - name: Compile scripts
+        run: python3 -m py_compile scripts/*.py
+      - name: Validate every spec
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          specs=(specs/*.json)
+          if [ ${#specs[@]} -eq 0 ]; then
+            echo "No specs found" >&2
+            exit 1
+          fi
+          for spec in "${specs[@]}"; do
+            echo "::group::validate ${spec}"
+            python3 scripts/design_spec.py validate "${spec}"
+            echo "::endgroup::"
+          done
+
+  design:
+    name: Build, route, DRC and fab
+    runs-on: ubuntu-latest
+    needs: spec
+    steps:
+      - uses: actions/checkout@v7
+      - name: Prepare writable output
+        run: |
+          mkdir -p build
+          chmod -R 0777 build
+          : > build/summary.md
+          chmod 0666 build/summary.md
+      - name: Run the KiCad 9 + Freerouting pipeline
+        run: |
+          set -euo pipefail
+          docker run --rm --user root \
+            -v "${PWD}:/work" -w /work \
+            -e HOME=/tmp \
+            -e GITHUB_STEP_SUMMARY=/work/build/summary.md \
+            kicad/kicad:9.0 \
+            bash -lc '
+              set -euo pipefail
+              apt-get update -qq
+              apt-get install -y -qq curl ca-certificates >/dev/null
+
+              # Freerouting 2.5.0 is built for Java 25. The KiCad image ships
+              # Java-free, so install a pinned Adoptium JRE rather than relying
+              # on the Debian default (Java 17).
+              curl -fL -o /tmp/jre25.tar.gz \
+                "https://api.adoptium.net/v3/binary/latest/25/ga/linux/x64/jre/hotspot/normal/eclipse"
+              mkdir -p /opt/jre25
+              tar -xzf /tmp/jre25.tar.gz -C /opt/jre25 --strip-components=1
+              export PATH="/opt/jre25/bin:${PATH}"
+              java -version
+
+              curl -fL -o build/freerouting.jar \
+                "https://github.com/freerouting/freerouting/releases/download/v2.5.0/freerouting-2.5.0.jar"
+
+              if ! python3 -c "import pcbnew" 2>/dev/null; then
+                PCB_DIR=$(dirname "$(find /usr -name pcbnew.py 2>/dev/null | head -1)")
+                if [ -n "${PCB_DIR}" ] && [ -d "${PCB_DIR}" ]; then
+                  export PYTHONPATH="${PCB_DIR}:${PYTHONPATH:-}"
+                fi
+              fi
+              python3 -c "import pcbnew; print(\"pcbnew\", pcbnew.GetBuildVersion())"
+
+              python3 scripts/design_pipeline.py all \
+                specs/led-blinky.json \
+                -o build/led-blinky \
+                --freerouting-jar build/freerouting.jar \
+                --kicad-cli kicad-cli
+            '
+      - name: Publish design summary
+        if: always()
+        run: |
+          if [ -f build/summary.md ]; then
+            cat build/summary.md >> "${GITHUB_STEP_SUMMARY}"
+          fi
+      - name: Upload design outputs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: design-output
+          path: build/led-blinky/
+          if-no-files-found: warn
+      - name: Upload design report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: design-report
+          path: build/led-blinky/report/
+          if-no-files-found: warn

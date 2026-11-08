@@ -1,0 +1,44 @@
+{
+  "name": "2layer-low-speed",
+  "description": "Rigid FR4, two copper layers, low-speed digital and low-current power. Full automation is permitted: build, place, autoroute, DRC, DFM and fabrication export.",
+  "layers": {
+    "min": 2,
+    "max": 2
+  },
+  "automation": "full",
+  "gates": {
+    "structural": "error",
+    "drc": "error",
+    "unconnected": "zero",
+    "dfm": "error",
+    "netlist_parity": "error",
+    "fab": "error",
+    "stackup": "off",
+    "impedance": "off",
+    "length_match": "off",
+    "thermal": "report",
+    "emc": "off",
+    "rf": "off",
+    "safety": "off",
+    "mechanical": "off"
+  },
+  "human_signoff": [],
+  "routing": {
+    "autorouter": "freerouting",
+    "max_passes": 100,
+    "threads": 4,
+    "attempts": 3
+  },
+  "fab_outputs": [
+    "gerbers",
+    "drill",
+    "pos",
+    "step",
+    "ipc356"
+  ],
+  "notes": [
+    "The default 2-layer stackup is a generic 1.6 mm FR4 core; confirm it with the fabricator.",
+    "Full automation is only claimed when DRC, unconnected and DFM gates all pass.",
+    "This profile is not for controlled impedance, RF, high voltage, flex or safety-critical designs."
+  ]
+}

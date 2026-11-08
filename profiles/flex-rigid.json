@@ -1,0 +1,48 @@
+{
+  "name": "flex-rigid",
+  "description": "Flex and rigid-flex boards. The pipeline generates and checks the electrical design, but bend radius, stiffener, coverlay, assembly and mechanical reliability require human sign-off.",
+  "layers": {
+    "min": 1,
+    "max": 12
+  },
+  "automation": "assisted",
+  "gates": {
+    "structural": "error",
+    "drc": "error",
+    "unconnected": "zero",
+    "dfm": "error",
+    "netlist_parity": "error",
+    "fab": "error",
+    "stackup": "required",
+    "impedance": "computed",
+    "length_match": "computed",
+    "thermal": "report",
+    "emc": "report",
+    "rf": "off",
+    "safety": "off",
+    "mechanical": "human"
+  },
+  "human_signoff": [
+    "mechanical",
+    "flex_bend",
+    "assembly"
+  ],
+  "routing": {
+    "autorouter": "freerouting",
+    "max_passes": 150,
+    "threads": 4,
+    "attempts": 3
+  },
+  "fab_outputs": [
+    "gerbers",
+    "drill",
+    "pos",
+    "step",
+    "ipc356"
+  ],
+  "notes": [
+    "Do not autoroute across a bend area; keep conductors perpendicular to the bend and use curved traces.",
+    "Confirm coverlay, stiffener, adhesive and bend-radius requirements with the fabricator.",
+    "The pipeline cannot certify flex fatigue life."
+  ]
+}

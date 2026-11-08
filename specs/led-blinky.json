@@ -1,0 +1,129 @@
+{
+  "version": 1,
+  "name": "led-blinky",
+  "profile": "2layer-low-speed",
+  "title": "LED blinky reference design, 32 x 20 mm",
+  "revision": "A",
+  "board": {
+    "width_mm": 32,
+    "height_mm": 20,
+    "layers": 2,
+    "thickness_mm": 1.6,
+    "copper_oz": 1,
+    "material": "FR4",
+    "surface_finish": "HASL-LF",
+    "mask_color": "green",
+    "silkscreen_color": "white",
+    "edge_radius_mm": 0
+  },
+  "rules": {
+    "min_track_width_mm": 0.2,
+    "min_clearance_mm": 0.2,
+    "min_via_diameter_mm": 0.6,
+    "min_via_drill_mm": 0.3,
+    "min_hole_diameter_mm": 0.3,
+    "min_annular_ring_mm": 0.15,
+    "edge_clearance_mm": 0.5,
+    "min_silk_width_mm": 0.15,
+    "min_mask_sliver_mm": 0.1,
+    "min_hole_to_hole_mm": 0.5
+  },
+  "netclasses": {
+    "Default": {
+      "track_width_mm": 0.25,
+      "clearance_mm": 0.2,
+      "via_diameter_mm": 0.6,
+      "via_drill_mm": 0.3
+    },
+    "Power": {
+      "track_width_mm": 0.5,
+      "clearance_mm": 0.3,
+      "via_diameter_mm": 0.8,
+      "via_drill_mm": 0.4
+    }
+  },
+  "nets": [
+    {"name": "+5V", "class": "Power", "voltage_v": 5, "current_a": 0.5},
+    {"name": "GND", "class": "Power", "voltage_v": 0, "current_a": 0.5},
+    {"name": "LED_A", "class": "Default", "current_a": 0.02}
+  ],
+  "components": [
+    {
+      "ref": "J1",
+      "value": "5V IN",
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+      "at": {"x_mm": 6, "y_mm": 10, "rotation_deg": 0, "side": "front"},
+      "pads": {"1": "+5V", "2": "GND"}
+    },
+    {
+      "ref": "R1",
+      "value": "330R",
+      "footprint": "Resistor_SMD:R_0805_2012Metric",
+      "at": {"x_mm": 15, "y_mm": 10, "rotation_deg": 0, "side": "front"},
+      "pads": {"1": "+5V", "2": "LED_A"}
+    },
+    {
+      "ref": "D1",
+      "value": "RED",
+      "footprint": "LED_SMD:LED_0805_2012Metric",
+      "at": {"x_mm": 24, "y_mm": 10, "rotation_deg": 0, "side": "front"},
+      "pads": {"1": "GND", "2": "LED_A"}
+    },
+    {
+      "ref": "H1",
+      "value": "MOUNT",
+      "footprint": "MountingHole:MountingHole_2.5mm",
+      "at": {"x_mm": 29, "y_mm": 17, "rotation_deg": 0, "side": "front"},
+      "pads": {}
+    }
+  ],
+  "placement": {
+    "mode": "fixed",
+    "margin_mm": 2,
+    "grid_mm": 2.54,
+    "clearance_mm": 1
+  },
+  "routing": {
+    "mode": "freerouting",
+    "max_passes": 100,
+    "threads": 4,
+    "timeout_s": 900,
+    "attempts": 3,
+    "optimize": true
+  },
+  "zones": [
+    {
+      "net": "GND",
+      "layer": "B.Cu",
+      "clearance_mm": 0.3,
+      "min_thickness_mm": 0.25
+    }
+  ],
+  "fabrication": {
+    "vendor": "generic",
+    "capabilities": {
+      "min_track_mm": 0.15,
+      "min_clearance_mm": 0.15,
+      "min_via_diameter_mm": 0.45,
+      "min_via_drill_mm": 0.2,
+      "min_annular_ring_mm": 0.125,
+      "min_hole_to_hole_mm": 0.5,
+      "max_width_mm": 300,
+      "max_height_mm": 300,
+      "max_layers": 8
+    }
+  },
+  "signoff": {
+    "completed": [],
+    "reviewer": "",
+    "date": "",
+    "notes": "Reference fixture. The 2-layer low-speed profile has no mandatory human sign-off."
+  },
+  "assumptions": [
+    "5 V input at J1; LED current limited by R1 to approximately 10 mA.",
+    "1 oz copper, 1.6 mm FR4, HASL-LF, green mask, white silkscreen.",
+    "Ambient 25 C, still air; IPC-2152 10 C rise used for power-width checks.",
+    "GND is a bottom-layer copper pour; refill zones before plotting.",
+    "Generic fabrication capabilities; confirm the actual vendor's limits before release."
+  ]
+}

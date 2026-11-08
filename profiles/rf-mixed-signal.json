@@ -1,0 +1,48 @@
+{
+  "name": "rf-mixed-signal",
+  "description": "RF and mixed-signal boards. Automation builds, routes and checks what can be checked, but RF, EMC and thermal performance require qualified human sign-off.",
+  "layers": {
+    "min": 2,
+    "max": 12
+  },
+  "automation": "assisted",
+  "gates": {
+    "structural": "error",
+    "drc": "error",
+    "unconnected": "zero",
+    "dfm": "error",
+    "netlist_parity": "error",
+    "fab": "error",
+    "stackup": "required",
+    "impedance": "computed",
+    "length_match": "computed",
+    "thermal": "report",
+    "emc": "report",
+    "rf": "human",
+    "safety": "off",
+    "mechanical": "off"
+  },
+  "human_signoff": [
+    "rf",
+    "emc",
+    "thermal"
+  ],
+  "routing": {
+    "autorouter": "freerouting",
+    "max_passes": 200,
+    "threads": 4,
+    "attempts": 4
+  },
+  "fab_outputs": [
+    "gerbers",
+    "drill",
+    "pos",
+    "step",
+    "ipc356"
+  ],
+  "notes": [
+    "Autorouting is not acceptable for impedance-critical RF paths; treat the routed board as a draft and re-route RF nets manually.",
+    "The pipeline refuses to claim RF/EMC/thermal performance without documented human sign-off.",
+    "Keep RF nets short, on a single layer where possible, over an uninterrupted reference plane, with matched launches and no stubs."
+  ]
+}
