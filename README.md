@@ -4,8 +4,8 @@ An Agent Skill for **professional automatic PCB design** with KiCad 9. It turns 
 
 ## What it does
 
-- **Automatic design:** spec validation → board build with real KiCad footprints → Freerouting → DRC/DFM → Gerbers/drill/position/STEP → gate report.
-- **Multiple inputs:** canonical JSON spec, KiCad schematic, KiCad netlist, or an existing `.kicad_pcb` for route/check/export.
+- **Automatic design:** spec validation → board build with real KiCad footprints → Freerouting → DRC/DFM → Gerbers/drill/position/STEP/IPC-D-356 → gate report.
+- **Multiple inputs:** canonical JSON spec, KiCad schematic, KiCad netlist, or an existing `.kicad_pcb` for route/check/export; a natural-language request is first converted into a reviewable spec.
 - **Board-class profiles:** 2-layer low-speed (full automation), 4/6-layer controlled impedance, RF/mixed-signal, flex-rigid, and high-voltage. Profiles define the hard gates and required human sign-offs.
 - **Professional honesty:** `professional_claim` is true only when every hard gate passes and every required sign-off is recorded. RF, EMC, thermal, safety and flex fatigue are never claimed without sign-off.
 - **Manual review path:** the original KiCad 9 s-expression guidance, validator-clean assets and dependency-free structural checker remain available for review and patching.
@@ -23,7 +23,7 @@ An Agent Skill for **professional automatic PCB design** with KiCad 9. It turns 
 | `scripts/pcb_build.py` | Spec → KiCad board with real library footprints (pcbnew) |
 | `scripts/pcb_route.py` | DSN export → Freerouting → SES import → zone fill |
 | `scripts/pcb_check.py` | Structural, DRC, DFM, netlist-parity and length-match gates |
-| `scripts/pcb_fab.py` | Gerbers, drill, position, STEP, IPC-356 and fabrication README |
+| `scripts/pcb_fab.py` | Gerbers, drill, position, STEP, IPC-D-356 and fabrication README |
 | `scripts/design_pipeline.py` | Orchestrates build/route/check/fab and writes the release report |
 | `scripts/check_pcb.py` | Structural/geometry pre-flight validator |
 | `tests/` | Unit tests for spec validation, impedance, netlist import and gates |
@@ -78,10 +78,12 @@ led-blinky.kicad_pcb        generated board
 led-blinky.kicad_pro        design rules and netclasses
 route-attempt-N/            DSN, SES and Freerouting logs
 check/check.json            structural, DRC, DFM, parity, length-match results
-fab/                        Gerbers, drill, position, STEP, IPC-356, zip
+fab/                        Gerbers, drill, position, STEP, IPC-D-356, zip, fab.json
 report/design-report.json   machine-readable gate report
 report/design-report.md     release summary
 ```
+
+Every output listed in `profile.fab_outputs` is a hard gate. The 2-layer profile requires Gerbers, drill, position, STEP and IPC-D-356; a missing or failed output keeps `professional_claim` false. Gerbers contain only copper, paste, mask, silkscreen and edge cuts, and the fabrication README records the export log.
 
 The pipeline exits non-zero unless `professional_claim` is true. That is the point: a routed board is not a release until the gates and required sign-offs pass.
 
@@ -126,6 +128,8 @@ It is **not** a DRC replacement. It has been verified against the official KiCad
 ```bash
 kicad-cli pcb drc --severity-all --exit-code-violations board.kicad_pcb
 kicad-cli pcb export gerbers -o gerbers/ board.kicad_pcb
+# KiCad 9 calls this ipcd356; older CLIs use ipc356.
+kicad-cli pcb export ipcd356 -o board-ipc356.net board.kicad_pcb
 ```
 
 ## Automatic design in CI

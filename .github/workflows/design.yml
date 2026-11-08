@@ -7,6 +7,7 @@ on:
       - "profiles/**"
       - "schemas/**"
       - "scripts/**"
+      - "tests/**"
       - ".github/workflows/design.yml"
   pull_request:
     paths:
@@ -14,6 +15,7 @@ on:
       - "profiles/**"
       - "schemas/**"
       - "scripts/**"
+      - "tests/**"
       - ".github/workflows/design.yml"
   workflow_dispatch:
 
@@ -35,6 +37,8 @@ jobs:
           python-version: "3.12"
       - name: Compile scripts
         run: python3 -m py_compile scripts/*.py
+      - name: Run unit tests
+        run: python3 -m unittest discover -s tests -v
       - name: Validate every spec
         run: |
           set -euo pipefail

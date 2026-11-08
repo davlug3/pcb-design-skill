@@ -21,7 +21,7 @@ Create manufacturable, syntactically valid KiCad PCB files and output them as `.
 
 ## Automatic Design Pipeline (preferred for new boards)
 
-Do not hand-author a release board when this pipeline can do it. The pipeline turns a **design spec** into a board with real KiCad library footprints, routes it with **Freerouting**, runs **KiCad DRC + DFM + netlist parity**, exports Gerbers/drill/position/STEP, and writes a gate report. Use hand-authoring only to review or patch a generated board.
+Do not hand-author a release board when this pipeline can do it. The pipeline turns a **design spec** into a board with real KiCad library footprints, routes it with **Freerouting**, runs **KiCad DRC + DFM + netlist parity**, exports Gerbers/drill/position/STEP/IPC-D-356, and writes a gate report. Every output listed in `profile.fab_outputs` is a hard gate. Use hand-authoring only to review or patch a generated board.
 
 ```bash
 # 1. Validate intent (no KiCad needed)
@@ -94,7 +94,7 @@ The developer docs lag the application in places (they still describe pre-v7 `(w
 | `scripts/pcb_build.py` | Spec → KiCad board using real library footprints (pcbnew) |
 | `scripts/pcb_route.py` | DSN export → Freerouting → SES import → zone fill |
 | `scripts/pcb_check.py` | Structural, DRC, DFM, netlist-parity and length-match gates |
-| `scripts/pcb_fab.py` | Gerbers, drill, position, STEP, IPC-356 and fabrication README |
+| `scripts/pcb_fab.py` | Gerbers, drill, position, STEP, IPC-D-356 and fabrication README |
 | `scripts/design_pipeline.py` | Orchestrates the whole automatic design and writes the release report |
 | `scripts/check_pcb.py` | Dependency-free structural/geometry pre-flight checker |
 | `.github/workflows/design.yml` | CI: build, route, DRC/DFM, fab export and report in the KiCad 9 container |
@@ -210,7 +210,7 @@ The full working version is `assets/minimal-2layer.kicad_pcb`. The required shap
 
 ## Scope and Professional Honesty
 
-The automatic pipeline is designed to produce **professional, DRC-validated, fab-ready boards** for supported profiles, not to pretend that every electrical/mechanical property is solved. The hard gates (structural, DRC, unconnected, DFM, netlist parity, length match) are automated. The profile decides which properties additionally require qualified human sign-off.
+The automatic pipeline is designed to produce **professional, DRC-validated, fab-ready boards** for supported profiles, not to pretend that every electrical/mechanical property is solved. The hard gates (structural, DRC, unconnected, DFM, netlist parity, length match, stackup/impedance when the profile enables them, and required fabrication outputs) are automated. The profile decides which properties additionally require qualified human sign-off.
 
 - `2layer-low-speed`: full automatic release is possible when the report says `professional_claim: true`.
 - Controlled impedance: the pipeline computes geometry from the stated stackup and gates the result, but the fabricator's stackup and coupon must be confirmed; sign-off is still required.
@@ -240,6 +240,8 @@ python3 scripts/check_pcb.py --strict board.kicad_pcb
 kicad-cli pcb drc --severity-all --exit-code-violations board.kicad_pcb
 kicad-cli pcb export gerbers -o gerbers/ board.kicad_pcb
 kicad-cli pcb export drill -o gerbers/ board.kicad_pcb
+# KiCad 9 calls the IPC-D-356 exporter ipcd356; older CLIs use ipc356.
+kicad-cli pcb export ipcd356 -o board-ipc356.net board.kicad_pcb
 ```
 
 **Freerouting 2.5.0 requires Java 25+.** It is intentionally not committed (62 MB). Download it next to the scripts or set `FREEROUTING_JAR`:

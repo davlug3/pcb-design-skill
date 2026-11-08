@@ -20,7 +20,7 @@ Existing .kicad_pcb -------------------------------------------+----------------
                 structural + DRC + DFM + netlist parity + length match
                          |
                          v
-                Gerbers / drill / position / STEP / IPC-356
+                Gerbers / drill / position / STEP / IPC-D-356
                          |
                          v
                 report/design-report.json + .md
@@ -105,7 +105,9 @@ spec is the reviewable, reproducible artifact.
 
 Profiles live in `profiles/`. A profile defines the layer range, automation
 level, hard gates, required sign-offs, routing defaults and fabrication
-outputs.
+outputs. Every entry in `profile.fab_outputs` is a hard gate: a profile that
+lists Gerbers, drill, position, STEP and IPC-D-356 fails the `fab` gate if any
+one of them is missing.
 
 | Profile | Layers | Automation | Human sign-off |
 |---|---|---|---|
@@ -138,6 +140,23 @@ The DRC gate uses **error severity**. Full `--severity-all` reports are written
 for review, but warnings (for example library-footprint version drift) do not
 block release. Structural `--strict` is intentionally stricter.
 
+### Fabrication outputs
+
+`scripts/pcb_fab.py` exports only the layers that belong in a fabrication
+package: copper, paste, mask, silkscreen and `Edge.Cuts`. It writes a manifest
+(`fab.json`) and a fabrication README into the package.
+
+| Output | KiCad 9 command | Notes |
+|---|---|---|
+| `gerbers` | `pcb export gerbers --layers ...` | Relevant copper/mask/silk/paste/edge layers only |
+| `drill` | `pcb export drill` | Excellon drill file |
+| `pos` | `pcb export pos --format csv` | Assembly position file |
+| `step` | `pcb export step` | Board geometry; component 3D models need the KiCad 3D library |
+| `ipc356` | `pcb export ipcd356` | Falls back to `ipc356` on older CLIs |
+
+The `fab` gate is false when a required output is missing. The report includes
+`required_outputs` and `missing_required` so a failed package is explicit.
+
 ### Professional claim
 
 `report/design-report.json` contains:
@@ -169,7 +188,7 @@ sign-off; the skill must never overclaim them.
 |---|---|---|
 | KiCad | 9.0 (`20241229`) | pcbnew board build, DSN/SES, DRC, fab exports |
 | pcbnew Python | bundled with KiCad 9 | board construction, zones, connectivity |
-| `kicad-cli` | bundled with KiCad 9 | schematic netlist, DRC, Gerbers/drill/pos/STEP |
+| `kicad-cli` | bundled with KiCad 9 | schematic netlist, DRC, Gerbers/drill/pos/STEP/IPC-D-356 |
 | Freerouting | 2.5.0 | Specctra DSN/SES autorouter |
 | Java | 25+ | Freerouting 2.5.0 runtime (class file major 69) |
 | Python | 3.9+ | spec/gates/report; stdlib only |
@@ -222,8 +241,8 @@ Debian default (Java 17).
 2. Add a spec with `board.layers`, `stackup`, `netclasses` and `nets`.
 3. Add tests for any new calculation/gate.
 4. Run `python3 -m unittest discover -s tests -v`.
-5. Run the design workflow and inspect `report/design-report.md` and the DRC
-   report, not just the CI exit code.
+5. Run the design workflow and inspect `report/design-report.md`, `fab/fab.json`
+   and the DRC report, not just the CI exit code.
 
 ## Limits
 
@@ -236,3 +255,5 @@ Debian default (Java 17).
 - Auto-placement is deterministic shelf packing; review it before release.
 - Flex bend life, EMC, thermal, isolation and regulatory compliance are outside
   the pipeline's authority.
+- STEP files contain board geometry. Component 3D models are included only when
+  the KiCad 3D library is installed in the build environment.
