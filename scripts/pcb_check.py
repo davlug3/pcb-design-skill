@@ -57,7 +57,7 @@ def _parse_drc_report(text: str) -> dict[str, int]:
     m = re.search(r"Found\s+(\d+)\s+DRC violations", text)
     if m:
         errors = int(m.group(1))
-    m = re.search(r"Found\s+(\d+)\s+unconnected items", text)
+    m = re.search(r"Found\s+(\d+)\s+unconnected\s+(?:items|pads)", text)
     if m:
         unconnected = int(m.group(1))
     # The full report marks severity on each violation.
@@ -307,6 +307,9 @@ def gate_all(
     kicad_cli: str = "kicad-cli",
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
+    # The spec is authoritative for netclasses and minimum rules. Rewrite the
+    # project immediately before DRC so pcbnew cannot leave defaults behind.
+    pcb_build.write_project(spec, board_path.parent)
     structural = structural_check(board_path)
     drc = run_drc(board_path, output_dir, kicad_cli=kicad_cli)
     dfm = board_dfm(spec, board_path)

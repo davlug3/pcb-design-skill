@@ -187,6 +187,13 @@ def route(
     timeout_s = int(routing.get("timeout_s", 900))
     optimize = bool(routing.get("optimize", True))
     output_dir.mkdir(parents=True, exist_ok=True)
+    # Ensure the source project carries the spec netclasses, then copy it into
+    # each attempt directory so DSN export sees them.
+    try:
+        pcb_build.write_project(spec, board_path.parent)
+    except Exception:
+        pass
+    project_src = board_path.parent / f"{board_path.stem}.kicad_pro"
 
     best_path: Path | None = None
     best_score = (10**9, 10**9)
@@ -196,6 +203,8 @@ def route(
         attempt_dir.mkdir(parents=True, exist_ok=True)
         candidate = attempt_dir / board_path.name
         shutil.copy2(board_path, candidate)
+        if project_src.is_file():
+            shutil.copy2(project_src, attempt_dir / project_src.name)
         dsn = attempt_dir / f"{spec['name']}.dsn"
         ses = attempt_dir / f"{spec['name']}.ses"
         log = attempt_dir / f"freerouting-{attempt}.log"
@@ -227,6 +236,12 @@ def route(
         raise RuntimeError("routing did not produce a candidate board")
     shutil.copy2(best_path, board_path)
     fill_zones(board_path)
+    # The final board save can rewrite project defaults; restore the spec rules
+    # before DRC reads the project.
+    try:
+        pcb_build.write_project(spec, output_dir)
+    except Exception:
+        pass
     return {
         "attempts": results,
         "selected_attempt": best_path.parent.name,

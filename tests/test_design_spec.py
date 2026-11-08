@@ -194,6 +194,19 @@ class GateTests(unittest.TestCase):
         self.assertFalse(report["professional_claim"])
         self.assertIn("drc:2", report["failures"])
 
+    def test_structural_failure_count_one_is_not_boolean_true(self) -> None:
+        spec = led_spec()
+        profile = led_profile()
+        findings = ds.validate_spec(spec, profile)
+        report = ds.gate_report(
+            spec,
+            profile,
+            findings,
+            {"structural": 1, "drc": 0, "unconnected": 0, "dfm": 0, "netlist_parity": 0, "stackup": 0, "length_match": 0, "fab": 0},
+        )
+        self.assertFalse(report["professional_claim"])
+        self.assertIn("structural:1", report["failures"])
+
 
 class SizingTests(unittest.TestCase):
     def test_ipc2152_width_increases_with_current(self) -> None:

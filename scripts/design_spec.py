@@ -698,6 +698,22 @@ def derive_nets(spec: dict[str, Any]) -> dict[str, Any]:
     return s
 
 
+def _gate_passed(value: Any) -> bool:
+    """Strict gate predicate.
+
+    ``1 == True`` in Python, so membership tests like ``value in (0, True)``
+    silently accept a failure count of 1. Treat booleans as booleans, zero
+    counts as pass, and everything else as failure.
+    """
+    if value is True:
+        return True
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, (int, float)) and value == 0:
+        return True
+    return value == "pass"
+
+
 def gate_report(
     spec: dict[str, Any],
     profile: dict[str, Any],
@@ -732,7 +748,7 @@ def gate_report(
             if gate in ("error", "zero", "required", "computed"):
                 failures.append(f"{key}:not_run")
             continue
-        if gate in ("error", "zero", "required", "computed") and value not in (0, "pass", True):
+        if gate in ("error", "zero", "required", "computed") and not _gate_passed(value):
             failures.append(f"{key}:{value}")
     missing_signoff = [item for item in required_signoff if item not in completed]
     if missing_signoff:

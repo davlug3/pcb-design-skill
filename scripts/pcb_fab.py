@@ -29,6 +29,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import design_spec as ds  # noqa: E402
+import pcb_build  # noqa: E402
 
 
 def _run(cmd: list[str], *, timeout: int = 600) -> subprocess.CompletedProcess:
@@ -52,6 +53,8 @@ def _step(name: str, cmd: list[str], output: Path, log: list[dict[str, Any]], *,
 
 def export_fab(spec: dict[str, Any], board_path: Path, output_dir: Path, kicad_cli: str = "kicad-cli") -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
+    # kicad-cli reads the project for netclass-aware plotting; restore it first.
+    pcb_build.write_project(spec, board_path.parent)
     gerbers = output_dir / "gerbers"
     drill = output_dir / "drill"
     gerbers.mkdir(exist_ok=True)

@@ -242,6 +242,10 @@ def patch_board_file(path: Path, spec: dict[str, Any]) -> None:
     text = path.read_text(encoding="utf-8")
     thickness = float(spec["board"].get("thickness_mm", 1.6))
     text = re.sub(r"\(thickness\s+[0-9.]+\)", f"(thickness {thickness:.6g})", text, count=1)
+    # pcbnew stamps itself as the generator. Identify this pipeline instead so
+    # the strict structural checker does not flag a third-party pcbnew file.
+    text = re.sub(r'\(generator\s+"[^"]*"\)', '(generator "pcb-design-skill")', text, count=1)
+    text = re.sub(r'\(generator_version\s+"[^"]*"\)', '(generator_version "2.0")', text, count=1)
     text = replace_stackup(text, stackup_block(spec))
     path.write_text(text, encoding="utf-8")
 
@@ -571,7 +575,6 @@ def build(spec: dict[str, Any], output_dir: Path, footprints_dir: Path | None = 
 
     pcbnew.SaveBoard(str(board_path), board)
     patch_board_file(board_path, spec)
-    write_project(spec, output_dir)
 
     # Re-load the patched board and fill zones so the saved file contains
     # filled polygons. This is also the state that DRC and plotting expect.
@@ -581,6 +584,10 @@ def build(spec: dict[str, Any], output_dir: Path, footprints_dir: Path | None = 
         filler.Fill(board.Zones())
         pcbnew.SaveBoard(str(board_path), board)
         patch_board_file(board_path, spec)
+
+    # pcbnew may rewrite the project when it loads/saves the board. Write the
+    # spec-derived rules and netclasses last so DRC and Freerouting see them.
+    write_project(spec, output_dir)
     return board_path
 
 

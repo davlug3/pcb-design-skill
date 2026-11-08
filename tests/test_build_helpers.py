@@ -52,6 +52,21 @@ class StackupTests(unittest.TestCase):
         self.assertEqual(out.count("(stackup"), 1)
         self.assertTrue(out.endswith("))"))
 
+    def test_patch_board_file_identifies_pipeline(self) -> None:
+        text = (
+            "(kicad_pcb (version 20241229) (generator \"pcbnew\") "
+            "(generator_version \"9.0\") (general (thickness 1.6)) "
+            "(setup (pad_to_mask_clearance 0)))"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "board.kicad_pcb"
+            path.write_text(text)
+            pcb_build.patch_board_file(path, spec())
+            patched = path.read_text()
+        self.assertIn('(generator "pcb-design-skill")', patched)
+        self.assertIn('(generator_version "2.0")', patched)
+        self.assertIn("(stackup", patched)
+
 
 class ProjectTests(unittest.TestCase):
     def test_project_contains_netclasses_and_rules(self) -> None:
@@ -79,6 +94,16 @@ class FootprintPathTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(FileNotFoundError):
                 pcb_build.footprint_paths("NoSuchLib:NoSuchPart", Path(tmp))
+
+
+class DrcParserTests(unittest.TestCase):
+    def test_unconnected_pads_are_parsed(self) -> None:
+        import pcb_check
+        parsed = pcb_check._parse_drc_report(
+            "** Found 0 DRC violations **\n\n** Found 3 unconnected pads **\n"
+        )
+        self.assertEqual(parsed["violations"], 0)
+        self.assertEqual(parsed["unconnected"], 3)
 
 
 if __name__ == "__main__":
