@@ -108,6 +108,7 @@ class StageTests(unittest.TestCase):
         self.assertEqual(env_probe.recommended_backend(make_probe()), "none")
 
 
+@mock.patch.dict(os.environ, {"GITHUB_ACTIONS": ""})
 class BackendSelectionTests(unittest.TestCase):
     def test_auto_prefers_local_when_ready(self) -> None:
         probe = make_probe(pcbnew=True, kicad_cli=True, java=True, freerouting=True, ci=True)
