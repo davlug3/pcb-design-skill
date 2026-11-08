@@ -152,17 +152,21 @@ def report_markdown(report: dict[str, Any], extra: dict[str, Any]) -> str:
         for item in report["assumptions"]:
             lines.append(f"- {item}")
     if extra.get("fab"):
-        lines.extend(
-            [
-                "",
-                "## Fabrication package",
-                "",
-                f"- Archive: `{extra['fab'].get('archive')}`",
-                f"- Gerbers: `{extra['fab'].get('gerbers')}`",
-                f"- Drill: `{extra['fab'].get('drill')}`",
-                f"- Position: `{extra['fab'].get('pos')}`",
-            ]
-        )
+        fab = extra["fab"]
+        lines.extend(["", "## Fabrication package", "", f"- Archive: `{fab.get('archive')}`"])
+        for label, key in (
+            ("Gerbers", "gerbers"),
+            ("Drill", "drill"),
+            ("Position", "pos"),
+            ("STEP", "step"),
+            ("IPC-D-356", "ipc356"),
+        ):
+            if fab.get(key):
+                lines.append(f"- {label}: `{fab[key]}`")
+        if fab.get("required_outputs"):
+            lines.append(f"- Required outputs: {', '.join(fab['required_outputs'])}")
+        if fab.get("missing_required"):
+            lines.append(f"- Missing required outputs: {', '.join(fab['missing_required'])}")
     lines.extend(["", "---", "", report.get("disclaimer", ""), ""])
     return "\n".join(lines)
 

@@ -4,15 +4,19 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
+import textwrap
 import unittest
+import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
 import design_spec as ds  # noqa: E402
 import pcb_build  # noqa: E402
+import pcb_fab  # noqa: E402
 
 
 def spec() -> dict:
@@ -94,6 +98,105 @@ class FootprintPathTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(FileNotFoundError):
                 pcb_build.footprint_paths("NoSuchLib:NoSuchPart", Path(tmp))
+
+
+class FabOutputTests(unittest.TestCase):
+    def _fake_cli(self, directory: Path) -> Path:
+        path = directory / "kicad-cli"
+        path.write_text(
+            f"#!{sys.executable}\n"
+            + textwrap.dedent(
+                """\
+                import os
+                import pathlib
+                import sys
+
+                args = sys.argv[1:]
+                sub = args[2] if len(args) > 2 else ""
+                out = args[args.index("-o") + 1] if "-o" in args else None
+                if sub == "gerbers":
+                    target = pathlib.Path(out)
+                    target.mkdir(parents=True, exist_ok=True)
+                    (target / "fake.gtl").write_text("gerber")
+                elif sub == "drill":
+                    target = pathlib.Path(out)
+                    target.mkdir(parents=True, exist_ok=True)
+                    (target / "fake.drl").write_text("drill")
+                elif sub in ("pos", "step"):
+                    pathlib.Path(out).write_text(sub)
+                elif sub in ("ipcd356", "ipc356"):
+                    if os.environ.get("FAKE_FAIL_IPC") == "1":
+                        sys.exit(1)
+                    pathlib.Path(out).write_text("ipc")
+                else:
+                    sys.exit(2)
+                """
+            )
+        )
+        path.chmod(0o755)
+        return path
+
+    def test_profile_requires_all_package_outputs(self) -> None:
+        self.assertEqual(
+            pcb_fab.required_fab_outputs(spec()),
+            {"gerbers", "drill", "pos", "step", "ipc356"},
+        )
+        self.assertEqual(
+            pcb_fab.required_fab_outputs(spec(), ["gerbers", "ipcd356"]),
+            {"gerbers", "ipc356"},
+        )
+
+    def test_gerber_layers_follow_copper_count(self) -> None:
+        two = pcb_fab.gerber_layers(spec())
+        self.assertEqual(two[:2], ["F.Cu", "B.Cu"])
+        self.assertNotIn("In1.Cu", two)
+        self.assertIn("Edge.Cuts", two)
+        self.assertIn("F.SilkS", two)
+        four_spec = spec()
+        four_spec["board"]["layers"] = 4
+        four = pcb_fab.gerber_layers(four_spec)
+        self.assertEqual(four[:4], ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu"])
+        six_spec = spec()
+        six_spec["board"]["layers"] = 6
+        self.assertEqual(pcb_fab.gerber_layers(six_spec)[:6], ["F.Cu", "In1.Cu", "In2.Cu", "In3.Cu", "In4.Cu", "B.Cu"])
+
+    def test_export_package_and_ipc356(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            board = root / "board.kicad_pcb"
+            board.write_text("(kicad_pcb)")
+            fake = self._fake_cli(root)
+            result = pcb_fab.export_fab(spec(), board, root / "fab", kicad_cli=str(fake))
+            self.assertTrue(result["ok"], result)
+            self.assertEqual(result["missing_required"], [])
+            self.assertTrue(Path(result["ipc356"]).is_file())
+            self.assertTrue(Path(result["archive"]).is_file())
+            with zipfile.ZipFile(result["archive"]) as zf:
+                names = set(zf.namelist())
+            self.assertIn("fab.json", names)
+            self.assertIn("gerbers/fake.gtl", names)
+            self.assertIn("drill/fake.drl", names)
+
+    def test_missing_required_ipc356_fails_the_fab_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            board = root / "board.kicad_pcb"
+            board.write_text("(kicad_pcb)")
+            fake = self._fake_cli(root)
+            old = os.environ.get("FAKE_FAIL_IPC")
+            os.environ["FAKE_FAIL_IPC"] = "1"
+            try:
+                result = pcb_fab.export_fab(spec(), board, root / "fab", kicad_cli=str(fake))
+            finally:
+                if old is None:
+                    os.environ.pop("FAKE_FAIL_IPC", None)
+                else:
+                    os.environ["FAKE_FAIL_IPC"] = old
+            self.assertFalse(result["ok"])
+            self.assertEqual(result["missing_required"], ["ipc356"])
+            ipc_step = next(item for item in result["steps"] if item["step"] == "ipc356")
+            self.assertTrue(ipc_step["required"])
+            self.assertFalse(ipc_step["ok"])
 
 
 class DrcParserTests(unittest.TestCase):

@@ -25,7 +25,7 @@ import subprocess
 import sys
 import zipfile
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import design_spec as ds  # noqa: E402
@@ -36,9 +36,19 @@ def _run(cmd: list[str], *, timeout: int = 600) -> subprocess.CompletedProcess:
     return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
 
-def _step(name: str, cmd: list[str], output: Path, log: list[dict[str, Any]], *, required: bool = False) -> bool:
+def _step(
+    name: str,
+    cmd: list[str],
+    output: Path,
+    log: list[dict[str, Any]],
+    *,
+    required: bool = False,
+    check: Callable[[], bool] | None = None,
+) -> bool:
     proc = _run(cmd)
     ok = proc.returncode == 0 and output.exists()
+    if ok and check is not None:
+        ok = check()
     log.append(
         {
             "step": name,
@@ -51,23 +61,136 @@ def _step(name: str, cmd: list[str], output: Path, log: list[dict[str, Any]], *,
     return ok
 
 
-def export_fab(spec: dict[str, Any], board_path: Path, output_dir: Path, kicad_cli: str = "kicad-cli") -> dict[str, Any]:
+def required_fab_outputs(spec: dict[str, Any], override: list[str] | None = None) -> set[str]:
+    """Return the fabrication outputs the profile requires.
+
+    The profile is the contract: every listed output is a hard gate. Aliases
+    are normalized so KiCad 9's ``ipcd356`` and the older ``ipc356`` name map
+    to the same package item.
+    """
+    if override is not None:
+        outputs = list(override)
+    else:
+        outputs = []
+        profile_name = spec.get("profile")
+        if profile_name:
+            try:
+                outputs = list(ds.load_profile(str(profile_name)).get("fab_outputs", []))
+            except Exception:
+                outputs = []
+        if not outputs:
+            outputs = ["gerbers", "drill"]
+    return {"ipc356" if item in ("ipc356", "ipcd356") else item for item in outputs}
+
+
+def gerber_layers(spec: dict[str, Any]) -> list[str]:
+    """Layers that belong in a fabrication package, not every empty user layer."""
+    count = int(spec.get("board", {}).get("layers", 2))
+    copper = ["F.Cu"] + [f"In{i}.Cu" for i in range(1, max(1, count - 1))] + ["B.Cu"]
+    return copper + [
+        "F.Paste",
+        "B.Paste",
+        "F.SilkS",
+        "B.SilkS",
+        "F.Mask",
+        "B.Mask",
+        "Edge.Cuts",
+    ]
+
+
+def _ipc356_step(
+    kicad_cli: str,
+    board_path: Path,
+    output: Path,
+    log: list[dict[str, Any]],
+    *,
+    required: bool,
+) -> bool:
+    """Export IPC-D-356 across KiCad 9 (ipcd356) and older (ipc356) CLIs."""
+    attempts: list[dict[str, Any]] = []
+    last_code = 1
+    for subcommand in ("ipcd356", "ipc356"):
+        cmd = [kicad_cli, "pcb", "export", subcommand, "-o", str(output), str(board_path)]
+        proc = _run(cmd)
+        last_code = proc.returncode
+        attempts.append(
+            {
+                "command": subcommand,
+                "exit_code": proc.returncode,
+                "output": (proc.stdout + proc.stderr).strip(),
+            }
+        )
+        if proc.returncode == 0 and output.exists():
+            log.append(
+                {
+                    "step": "ipc356",
+                    "ok": True,
+                    "required": required,
+                    "exit_code": 0,
+                    "command": subcommand,
+                    "output": attempts[-1]["output"][-4000:],
+                }
+            )
+            return True
+    log.append(
+        {
+            "step": "ipc356",
+            "ok": False,
+            "required": required,
+            "exit_code": last_code,
+            "command": "ipcd356/ipc356",
+            "output": "\n".join(
+                f"{item['command']}: {item['output']}" for item in attempts
+            )[-4000:],
+        }
+    )
+    return False
+
+
+def export_fab(
+    spec: dict[str, Any],
+    board_path: Path,
+    output_dir: Path,
+    kicad_cli: str = "kicad-cli",
+    required_outputs: list[str] | None = None,
+) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     # kicad-cli reads the project for netclass-aware plotting; restore it first.
     pcb_build.write_project(spec, board_path.parent)
     gerbers = output_dir / "gerbers"
     drill = output_dir / "drill"
-    gerbers.mkdir(exist_ok=True)
-    drill.mkdir(exist_ok=True)
+    for directory in (gerbers, drill):
+        shutil.rmtree(directory, ignore_errors=True)
+        directory.mkdir(parents=True)
     log: list[dict[str, Any]] = []
     name = spec["name"]
+    required = required_fab_outputs(spec, required_outputs)
 
+    pos = output_dir / f"{name}-pos.csv"
+    step = output_dir / f"{name}.step"
+    ipc = output_dir / f"{name}-ipc356.net"
+    for stale in (pos, step, ipc):
+        if stale.exists():
+            stale.unlink()
+
+    layer_list = ",".join(gerber_layers(spec))
     _step(
         "gerbers",
-        [kicad_cli, "pcb", "export", "gerbers", "-o", str(gerbers) + os.sep, str(board_path)],
+        [
+            kicad_cli,
+            "pcb",
+            "export",
+            "gerbers",
+            "-o",
+            str(gerbers) + os.sep,
+            "--layers",
+            layer_list,
+            str(board_path),
+        ],
         gerbers,
         log,
-        required=True,
+        required="gerbers" in required,
+        check=lambda: any(gerbers.iterdir()),
     )
     _step(
         "drill",
@@ -82,9 +205,9 @@ def export_fab(spec: dict[str, Any], board_path: Path, output_dir: Path, kicad_c
         ],
         drill,
         log,
-        required=True,
+        required="drill" in required,
+        check=lambda: any(drill.iterdir()),
     )
-    pos = output_dir / f"{name}-pos.csv"
     _step(
         "pos",
         [
@@ -104,34 +227,32 @@ def export_fab(spec: dict[str, Any], board_path: Path, output_dir: Path, kicad_c
         ],
         pos,
         log,
+        required="pos" in required,
     )
-    step = output_dir / f"{name}.step"
     _step(
         "step",
         [kicad_cli, "pcb", "export", "step", "-o", str(step), str(board_path)],
         step,
         log,
+        required="step" in required,
     )
-    ipc = output_dir / f"{name}-ipc356.net"
-    _step(
-        "ipc356",
-        [kicad_cli, "pcb", "export", "ipc356", "-o", str(ipc), str(board_path)],
-        ipc,
-        log,
-    )
+    _ipc356_step(kicad_cli, board_path, ipc, log, required="ipc356" in required)
 
     readme = output_dir / "fabrication-README.md"
     readme.write_text(fabrication_readme(spec, log), encoding="utf-8")
 
-    archive = output_dir / f"{name}-fabrication.zip"
-    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for path in sorted(output_dir.rglob("*")):
-            if path == archive or path.is_dir():
-                continue
-            zf.write(path, path.relative_to(output_dir))
     gerber_files = [p for p in gerbers.iterdir() if p.is_file()]
     drill_files = [p for p in drill.iterdir() if p.is_file()]
+    produced = {
+        "gerbers": bool(gerber_files),
+        "drill": bool(drill_files),
+        "pos": pos.exists(),
+        "step": step.exists(),
+        "ipc356": ipc.exists(),
+    }
+    missing = sorted(item for item in required if not produced.get(item, False))
     required_ok = all(item["ok"] for item in log if item["required"])
+    archive = output_dir / f"{name}-fabrication.zip"
     result = {
         "output_dir": str(output_dir),
         "archive": str(archive),
@@ -143,10 +264,18 @@ def export_fab(spec: dict[str, Any], board_path: Path, output_dir: Path, kicad_c
         "step": str(step) if step.exists() else None,
         "ipc356": str(ipc) if ipc.exists() else None,
         "readme": str(readme),
+        "required_outputs": sorted(required),
+        "missing_required": missing,
         "steps": log,
-        "ok": bool(required_ok and gerber_files and drill_files),
+        "ok": bool(required_ok and not missing),
     }
+    # Include the manifest in the package itself.
     ds.write_json(output_dir / "fab.json", result)
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for path in sorted(output_dir.rglob("*")):
+            if path == archive or path.is_dir():
+                continue
+            zf.write(path, path.relative_to(output_dir))
     return result
 
 
@@ -216,6 +345,8 @@ def fabrication_readme(spec: dict[str, Any], log: list[dict[str, Any]]) -> str:
     lines.extend(
         [
             "- DRC and DFM gates were run by the pipeline; see the design report for the exact results.",
+            "- Gerbers are limited to copper, paste, mask, silkscreen and edge cuts.",
+            "- STEP contains board geometry; component 3D models are included only when the KiCad 3D library is installed.",
             "- Impedance, EMC, thermal and safety claims require the sign-offs listed in the profile.",
             "- Refill copper zones in KiCad if you edit the board after export.",
             "",
