@@ -239,6 +239,43 @@ pipeline forces the local backend so it can never dispatch itself recursively.
   `design-output` and `design-report`. A manual dispatch can select any
   `specs/*.json` and pass schematic/netlist/board inputs or skip flags.
 
+### Visual footprint and mechanical questions
+
+When the spec leaves a physical choice open, use `scripts/visual_ask.py` rather
+than silently picking a package. It serves a mobile-first page with real KiCad
+footprint previews and writes a typed answer JSON.
+
+```bash
+python3 scripts/visual_ask.py ask --footprint-for R1 --category resistor \
+  --out build/ask-R1.json --mobile
+python3 scripts/visual_ask.py ask --from-spec specs/led-blinky.json \
+  --out build/footprints.json --mobile
+python3 scripts/visual_ask.py ask --from-spec specs/board.json --only-missing \
+  --out build/footprints.json --mobile
+python3 scripts/visual_ask.py ask examples/visual-ask-led.json \
+  --out build/answers.json --mobile
+python3 scripts/visual_ask.py ask examples/visual-ask-led.json \
+  --out build/answers.json --detach --mobile
+```
+
+- `--mobile` binds to `0.0.0.0` and prints the LAN URL; without it the server
+  binds to `127.0.0.1`. There is **no token gate**; use it only on a trusted
+  network.
+- `--detach` returns immediately. It writes `answers.url` (send it to the user)
+  and `answers.status.json` (`waiting` → `answered`/`timeout`); the answer file
+  is written only after a valid submission.
+- Preview resolution: explicit `.kicad_mod` path → local KiCad libraries →
+  official KiCad footprint library on GitHub, cached under
+  `~/.cache/pcb-design-skill/footprints`. `--no-fetch` keeps it offline.
+- Question types are `footprint`, `choice`, `multi`, `text` and `confirm`.
+  Footprint questions can allow a typed `Library:Footprint` custom answer.
+- Answer JSON maps question IDs to typed values, e.g.
+  `{"R1": {"type": "footprint", "value": "...", "footprint": "...", "custom": false}}`.
+  Feed the selected footprint into the spec/board; do not re-ask in prose.
+- Safety-critical choices (high-voltage clearance, creepage, thermal, RF) still
+  require the profile's human sign-off. The picker records the user's geometry
+  choice; it does not certify it.
+
 ## Routing behavior
 
 - The builder exports DSN with `pcbnew.ExportSpecctraDSN`.

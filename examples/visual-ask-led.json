@@ -1,0 +1,101 @@
+{
+  "title": "LED blinky: choose the physical parts",
+  "intro": "These are the decisions that change the board geometry. The previews are rendered from the real KiCad footprint files.",
+  "submit_label": "Send part choices",
+  "questions": [
+    {
+      "id": "R1",
+      "type": "footprint",
+      "prompt": "Which footprint should R1 use?",
+      "help": "The resistor value is already in the design spec. This only chooses the package.",
+      "allow_custom": true,
+      "options": [
+        {
+          "id": "Resistor_SMD:R_0603_1608Metric",
+          "footprint": "Resistor_SMD:R_0603_1608Metric",
+          "label": "0603 · 1.6 × 0.8 mm",
+          "description": "Small SMD package. Fine for reflow, awkward to hand-solder."
+        },
+        {
+          "id": "Resistor_SMD:R_0805_2012Metric",
+          "footprint": "Resistor_SMD:R_0805_2012Metric",
+          "label": "0805 · 2.0 × 1.25 mm",
+          "description": "Good compromise for hand assembly and reflow."
+        },
+        {
+          "id": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+          "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+          "label": "Axial THT · 7.62 mm pitch",
+          "description": "Through-hole axial resistor. Easiest to hand-solder and rework."
+        }
+      ]
+    },
+    {
+      "id": "D1",
+      "type": "footprint",
+      "prompt": "Which LED package should D1 use?",
+      "help": "Pick the physical LED. The color question comes next.",
+      "allow_custom": true,
+      "options": [
+        {
+          "id": "LED_SMD:LED_0805_2012Metric",
+          "footprint": "LED_SMD:LED_0805_2012Metric",
+          "label": "0805 SMD LED",
+          "description": "Small SMD LED with a low profile."
+        },
+        {
+          "id": "LED_THT:LED_D3.0mm",
+          "footprint": "LED_THT:LED_D3.0mm",
+          "label": "3 mm THT LED",
+          "description": "Classic 3 mm through-hole LED. Easy to hand-solder."
+        },
+        {
+          "id": "LED_THT:LED_D5.0mm",
+          "footprint": "LED_THT:LED_D5.0mm",
+          "label": "5 mm THT LED",
+          "description": "Larger 5 mm through-hole LED with a taller profile."
+        }
+      ]
+    },
+    {
+      "id": "led_color",
+      "type": "choice",
+      "prompt": "What color should the LED be?",
+      "required": true,
+      "options": [
+        {"id": "red", "label": "Red", "swatch": "#c0392b"},
+        {"id": "green", "label": "Green", "swatch": "#2e8b57"},
+        {"id": "blue", "label": "Blue", "swatch": "#2d6cdf"},
+        {"id": "amber", "label": "Amber", "swatch": "#d98b4a"}
+      ]
+    },
+    {
+      "id": "mounting_holes",
+      "type": "confirm",
+      "prompt": "Should the board include two M2.5 mounting holes?",
+      "help": "This adds mechanical holes and changes the board outline keep-out.",
+      "required": false
+    },
+    {
+      "id": "silk",
+      "type": "multi",
+      "prompt": "Which silkscreen markings do you want?",
+      "required": false,
+      "min_selections": 0,
+      "options": [
+        {"id": "refs", "label": "Reference designators"},
+        {"id": "pin1", "label": "Pin 1 markers"},
+        {"id": "polarity", "label": "Polarity marks"},
+        {"id": "name", "label": "Board name and revision"}
+      ]
+    },
+    {
+      "id": "notes",
+      "type": "text",
+      "prompt": "Anything else the board should respect?",
+      "help": "Optional. Enclosure size, connector access, mounting constraints, or a preferred part you already have.",
+      "placeholder": "For example: keep the USB connector on the left edge, enclosure is 60 × 40 mm…",
+      "required": false
+    }
+  ]
+}

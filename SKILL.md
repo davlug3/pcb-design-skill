@@ -1,6 +1,6 @@
 ---
 name: pcb-design-skill
-description: Design, generate, automatically route, validate, and export manufacturable KiCad 9 printed circuit boards from a design spec, netlist, schematic, or existing board. Use when creating or editing PCB layouts, placing real library footprints, routing with Freerouting, defining stackups and nets, running KiCad DRC/DFM, or producing Gerbers and a professional release report. Covers automatic design, controlled-impedance/RF/flex/high-voltage gates, and structural validation.
+description: Design, generate, automatically route, validate, and export manufacturable KiCad 9 printed circuit boards from a design spec, netlist, schematic, or existing board. Use when creating or editing PCB layouts, placing real library footprints, routing with Freerouting, defining stackups and nets, running KiCad DRC/DFM, or producing Gerbers and a professional release report. Includes a mobile visual picker for footprint and design choices. Covers automatic design, controlled-impedance/RF/flex/high-voltage gates, and structural validation.
 license: MIT
 ---
 
@@ -15,7 +15,7 @@ Create manufacturable, syntactically valid KiCad PCB files and output them as `.
 1. **One dialect per file.** Header `version`, `generator_version`, track UUIDs, stroke syntax and footprint fields must all match the declared version.
 2. **A board is a complete file, not a snippet.** It must open in KiCad and pass the structural checker below.
 3. **Connectivity is geometric.** A track with the right net number that does not touch a pad or another track is still unrouted.
-4. **No silent electrical guesses.** Pin-to-net mapping, polarity, footprint choice and safety spacing must be stated as assumptions or asked about.
+4. **No silent electrical guesses.** Pin-to-net mapping, polarity, footprint choice and safety spacing must be stated as assumptions or asked about. When a footprint/package or mechanical choice has more than one plausible answer, use the visual asker below rather than picking silently.
 5. **Do not claim fabrication compliance without verified fab limits.** Manufacturing numbers are stackup- and vendor-specific.
 6. **No release claim without a passing report.** A board is release-ready only when `report/design-report.json` says `professional_claim: true`. Otherwise list the failed gates and missing sign-offs.
 
@@ -81,6 +81,44 @@ Stage commands (`build`, `route`, `check`, `fab`) run locally because CI cannot 
 
 **Iteration rule.** When a gate fails, change the spec (placement, width, clearance, stackup, class assignment) and regenerate. Do not edit a generated board and then claim the report applies; the report records the exact resolved spec (`<name>.spec.json`).
 
+## Visual Questions and Footprint Selection
+
+When the user needs to choose a footprint, package, connector orientation, LED color, mounting option, silkscreen preference, or any other geometry-affecting answer, **ask visually instead of guessing**. `scripts/visual_ask.py` starts a small local web page with real KiCad footprint previews. It is dependency-free, mobile-friendly, and works on Termux without KiCad installed.
+
+```bash
+# One footprint decision, using the built-in common-package catalog.
+python3 scripts/visual_ask.py ask --footprint-for R1 --category resistor \
+  --out build/ask-R1.json --mobile
+
+# Ask for every component footprint in a spec (current choice first).
+python3 scripts/visual_ask.py ask --from-spec specs/led-blinky.json \
+  --out build/footprints.json --mobile
+
+# Only components that have no footprint yet.
+python3 scripts/visual_ask.py ask --from-spec specs/board.json --only-missing \
+  --out build/footprints.json --mobile
+
+# A full payload: footprints, color, confirm, multi-select, free text.
+python3 scripts/visual_ask.py ask examples/visual-ask-led.json \
+  --out build/answers.json --mobile
+
+# Agent-friendly: return immediately, then send the printed URL to the user.
+python3 scripts/visual_ask.py ask examples/visual-ask-led.json \
+  --out build/answers.json --detach --mobile
+cat build/answers.url          # send this URL to the user
+cat build/answers.status.json  # waiting | answered | timeout
+```
+
+- **No account or token gate.** The server is local/LAN only. It binds to `127.0.0.1` by default; `--mobile` binds to `0.0.0.0` and prints the phone-accessible LAN URL. Run it only on a trusted network.
+- **Real previews.** Each footprint option is rendered from the actual `.kicad_mod` pads, silkscreen, courtyard and drills. Resolution order: explicit `.kicad_mod` path → local KiCad libraries (`KICAD9_FOOTPRINT_DIR` or `/usr/share/kicad/footprints`) → official KiCad footprint library on GitHub, cached under `~/.cache/pcb-design-skill/footprints`. Use `--no-fetch` for a fully offline run.
+- **Answer file.** The server writes `--out` only after a valid submission and exits. The JSON maps question IDs to typed answers, for example `{"R1": {"type": "footprint", "value": "Resistor_SMD:R_0805_2012Metric", "footprint": "...", "custom": false}}`. Read it, then put the chosen footprint into the spec/board.
+- **Question types.** `footprint` (with `allow_custom` for a typed `Library:Footprint`), `choice`, `multi`, `text`, and `confirm`. Payload schema: `schemas/visual-ask.schema.json`; example: `examples/visual-ask-led.json`.
+- **Catalog helper.** `python3 scripts/visual_ask.py catalog resistor` lists built-in candidates for resistors, capacitors, LEDs, headers, SOT, SOIC, QFP, QFN and DIP. Add exact candidates with `--option Library:Footprint` (repeatable).
+- **Spec helper.** `--from-spec` asks one question per component, with the current spec footprint first and catalog alternatives after it. `--only-missing` restricts the questions to components that still need a footprint.
+- **Do not use it for safety-critical sign-off.** High-voltage clearance, creepage, thermal and RF decisions still need the profile's human sign-off; the picker only records the user's geometry choice.
+
+The page is intentionally mobile-first: large tap targets, a sticky answer dock, and a numbered one-pass flow. When the user answers, the agent continues from the JSON rather than re-asking in prose.
+
 ## Retrieval Sources (use before guessing)
 
 | Resource | URL | Use for |
@@ -107,8 +145,10 @@ The developer docs lag the application in places (they still describe pre-v7 `(w
 | `assets/example-led.kicad_pcb` | Validator-clean routed example: THT header, SMD resistor/LED, vias, courtyard, mounting hole |
 | `assets/example.kicad_dru` | Custom-rule examples (netclass width, high-voltage clearance) |
 | `schemas/design-spec.schema.json` | Canonical automatic-design spec (board, rules, nets, placement, stackup, gates) |
+| `schemas/visual-ask.schema.json` | Payload contract for visual footprint/choice questions |
 | `profiles/*.json` | Board-class rule envelopes and release gates |
 | `specs/led-blinky.json` | Reference spec for the automatic pipeline |
+| `examples/visual-ask-led.json` | Example visual payload covering footprints, choice, confirm, multi-select and text |
 | `scripts/design_spec.py` | Dependency-free spec validator, netlist importer, impedance/current calculations, gate report |
 | `scripts/pcb_build.py` | Spec → KiCad board using real library footprints (pcbnew) |
 | `scripts/pcb_route.py` | DSN export → Freerouting → SES import → zone fill |
@@ -118,6 +158,9 @@ The developer docs lag the application in places (they still describe pre-v7 `(w
 | `scripts/env_probe.py` | Detects pcbnew, kicad-cli, Java 25, Freerouting, gh/git and recommends local vs CI |
 | `scripts/ci_dispatch.py` | Dispatches `.github/workflows/design.yml`, optionally watches and downloads artifacts |
 | `scripts/check_pcb.py` | Dependency-free structural/geometry pre-flight checker |
+| `scripts/visual_ask.py` | Local/LAN visual question server; writes typed answer JSON |
+| `scripts/footprint_preview.py` | Renders real KiCad footprint geometry to SVG, with local-library and GitHub-cache resolution |
+| `web/visual-ask/` | Mobile-first question UI served by `visual_ask.py` |
 | `.github/workflows/design.yml` | CI: build, route, DRC/DFM, fab export and report in the KiCad 9 container |
 
 Use the search terms in these references before fetching a whole doc page: `version`, `generator_version`, `layers`, `stackup`, `setup`, `net`, `footprint`, `property`, `attr`, `pad`, `stroke`, `segment`, `via`, `zone`, `keepout`, `filled_polygon`, `Edge.Cuts`, `embedded_fonts`, `remove_unused_layers`, `courtyard`, `impedance`, `differential`, `3W`, `return path`, `DFM`, `trace width`.

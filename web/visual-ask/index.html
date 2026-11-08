@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0E3B2E">
+  <meta name="color-scheme" content="light">
+  <title>PCB design questions</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="sheet" id="sheet">
+    <header class="masthead">
+      <p class="masthead__kicker"><span class="masthead__mark" aria-hidden="true"></span> PCB design / part selection</p>
+      <h1 class="masthead__title" id="title">Loading questions…</h1>
+      <p class="masthead__intro" id="intro"></p>
+      <div class="progress" aria-live="polite">
+        <span class="progress__label" id="progress-text">0 of 0 answered</span>
+        <span class="progress__track" aria-hidden="true"><span class="progress__bar" id="progress-bar"></span></span>
+      </div>
+    </header>
+
+    <div class="alert" id="alert" role="alert" hidden></div>
+
+    <main class="questions" id="questions">
+      <p class="loading" id="loading">Loading questions…</p>
+    </main>
+
+    <footer class="dock" id="dock">
+      <div class="dock__status">
+        <span class="dock__state" id="dock-state">Checking answers</span>
+        <span class="dock__hint" id="dock-hint">Required questions must be answered before sending.</span>
+      </div>
+      <button class="button" id="submit" type="button" disabled>Send answers</button>
+    </footer>
+  </div>
+
+  <section class="done" id="done" hidden aria-labelledby="done-title">
+    <div class="done__card">
+      <svg class="done__check" viewBox="0 0 64 64" role="img" aria-label="Answers sent">
+        <circle cx="32" cy="32" r="30" fill="none" stroke="currentColor" stroke-width="2"/>
+        <path d="M19 33.5 28 42l17-20" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <p class="done__kicker">Answers recorded</p>
+      <h2 class="done__title" id="done-title">The agent can continue.</h2>
+      <p class="done__copy">Your selections are saved. You can close this tab or leave it open.</p>
+      <dl class="done__summary" id="done-summary"></dl>
+      <div class="done__actions">
+        <button class="button button--ghost" id="copy" type="button">Copy answer JSON</button>
+        <span class="done__copied" id="copied" role="status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+
+  <script src="/app.js"></script>
+</body>
+</html>

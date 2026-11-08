@@ -8,6 +8,7 @@ An Agent Skill for **professional automatic PCB design** with KiCad 9. It turns 
 - **Multiple inputs:** canonical JSON spec, KiCad schematic, KiCad netlist, or an existing `.kicad_pcb` for route/check/export; a natural-language request is first converted into a reviewable spec.
 - **Board-class profiles:** 2-layer low-speed (full automation), 4/6-layer controlled impedance, RF/mixed-signal, flex-rigid, and high-voltage. Profiles define the hard gates and required human sign-offs.
 - **Professional honesty:** `professional_claim` is true only when every hard gate passes and every required sign-off is recorded. RF, EMC, thermal, safety and flex fatigue are never claimed without sign-off.
+- **Visual part selection:** a local/LAN, mobile-first page asks for footprints and other design choices with real KiCad footprint previews, then writes typed JSON answers for the agent.
 - **Manual review path:** the original KiCad 9 s-expression guidance, validator-clean assets and dependency-free structural checker remain available for review and patching.
 - Targets **KiCad 9** (`(version 20241229)`), with a KiCad 8/6/7 dialect matrix for reading older boards.
 
@@ -17,8 +18,10 @@ An Agent Skill for **professional automatic PCB design** with KiCad 9. It turns 
 |------|---------|
 | `SKILL.md` | Automatic pipeline, workflow, rules, sources and validation commands |
 | `schemas/design-spec.schema.json` | Canonical design spec (board, rules, nets, components, placement, stackup, gates) |
+| `schemas/visual-ask.schema.json` | Payload contract for visual footprint/choice questions |
 | `profiles/*.json` | Board-class rule envelopes and release gates |
 | `specs/led-blinky.json` | Reference spec for the automatic pipeline |
+| `examples/visual-ask-led.json` | Example visual payload covering footprints, choice, confirm, multi-select and text |
 | `scripts/design_spec.py` | Dependency-free spec validator, netlist importer, impedance/current calculations, gate report |
 | `scripts/pcb_build.py` | Spec → KiCad board with real library footprints (pcbnew) |
 | `scripts/pcb_route.py` | DSN export → Freerouting → SES import → zone fill |
@@ -28,7 +31,10 @@ An Agent Skill for **professional automatic PCB design** with KiCad 9. It turns 
 | `scripts/env_probe.py` | Detects pcbnew, kicad-cli, Java 25, Freerouting, gh/git and recommends local vs CI |
 | `scripts/ci_dispatch.py` | Dispatches `.github/workflows/design.yml`, optionally watches and downloads artifacts |
 | `scripts/check_pcb.py` | Structural/geometry pre-flight validator |
-| `tests/` | Unit tests for spec validation, impedance, netlist import and gates |
+| `scripts/visual_ask.py` | Local/LAN visual question server; writes typed answer JSON |
+| `scripts/footprint_preview.py` | Renders real KiCad footprint geometry to SVG for the picker |
+| `web/visual-ask/` | Mobile-first question UI served by `visual_ask.py` |
+| `tests/` | Unit tests for spec validation, impedance, netlist import, gates, previews and the visual server |
 | `references/pcb-file-format.md` | Board sections, version matrix, layer ordinals, footprints, pads, tracks, zones |
 | `references/sexpr-primitives.md` | Token syntax, quoting, strokes, UUIDs, pad/graphic/zone primitives |
 | `references/practical-rules.md` | Stackup, placement, routing, current, SI/PI/EMI, impedance, thermal, DFM/DFA |
@@ -104,6 +110,37 @@ python3 scripts/design_pipeline.py all specs/board.json --board existing.kicad_p
 ```
 
 **Profiles:** `2layer-low-speed` (full automation), `4layer-impedance` / `6layer-impedance` (stackup + impedance + length-match gates; sign-off required), `rf-mixed-signal` (RF/EMC/thermal sign-off), `flex-rigid` (mechanical/flex/assembly sign-off), `high-voltage` (safety/creepage sign-off).
+
+## Visual part selection
+
+When a package or mechanical choice needs a human decision, the skill can ask with a mobile-friendly web page instead of guessing. Footprint cards are rendered from the real KiCad `.kicad_mod` geometry (pads, silkscreen, courtyard, drills), so the user sees the actual land pattern.
+
+```bash
+# One footprint decision from the built-in catalog.
+python3 scripts/visual_ask.py ask --footprint-for R1 --category resistor \
+  --out build/ask-R1.json --mobile
+
+# Ask for every component footprint in a spec (current choice first).
+python3 scripts/visual_ask.py ask --from-spec specs/led-blinky.json \
+  --out build/footprints.json --mobile
+
+# Only components that have no footprint yet.
+python3 scripts/visual_ask.py ask --from-spec specs/board.json --only-missing \
+  --out build/footprints.json --mobile
+
+# A full multi-question payload.
+python3 scripts/visual_ask.py ask examples/visual-ask-led.json \
+  --out build/answers.json --mobile
+
+# Agent-friendly background mode: returns immediately and writes the URL.
+python3 scripts/visual_ask.py ask examples/visual-ask-led.json \
+  --out build/answers.json --detach --mobile
+cat build/answers.url
+```
+
+The server is **local/LAN only, with no token or account gate**. It binds to `127.0.0.1` by default; `--mobile` binds to `0.0.0.0` and prints a phone-accessible URL. Run it only on a trusted network. It exits after a valid submission and writes `build/answers.json`; the agent reads that file and continues.
+
+Previews resolve from local KiCad libraries first, then the official KiCad footprint library on GitHub (cached under `~/.cache/pcb-design-skill/footprints`). Use `--no-fetch` for a fully offline run. The payload supports `footprint`, `choice`, `multi`, `text` and `confirm` questions; see `schemas/visual-ask.schema.json` and `examples/visual-ask-led.json`.
 
 ## Manual use
 
