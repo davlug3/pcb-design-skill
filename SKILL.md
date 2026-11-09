@@ -53,6 +53,17 @@ python3 scripts/design_pipeline.py fab   build/led-blinky/led-blinky.kicad_pcb -
 
 **Canonical inputs.** `specs/<name>.json` is the source of truth for the automatic path. Use `schemas/design-spec.schema.json` and `specs/led-blinky.json` as the model. For a natural-language request, write the spec first, state assumptions in `assumptions[]`, then run the pipeline. For a KiCad schematic/netlist, the netlist is authoritative for components/pad nets; the spec overlay supplies board size, stackup, rules, placement and routing. For an LTspice/SPICE netlist, `--ltspice` derives connectivity from SPICE nodes and asks for missing pin maps, footprints, placement and node aliases with the visual picker; the overlay still supplies board size, stackup and rules. Prefer importing the `.asc` schematic into KiCad 9 when possible.
 
+**Upstream: `circuit-design-skill`.** Board work that starts from the sibling circuit skill arrives as four files:
+
+```bash
+python3 scripts/design_pipeline.py all out/<name>-pcb.json \
+  --ltspice out/<name>.cir \
+  --pin-map out/<name>-pinmap.json \
+  --node-aliases out/<name>-node-aliases.json
+```
+
+The `.cir` is authoritative for connectivity; the overlay is authoritative for board size, stackup, rules, footprints and placement; the pin map maps SPICE pins to physical footprint pads; the node aliases map SPICE nodes to PCB net names. The overlay's `"version": 1` is the handoff contract: a different version is rejected, not guessed. No audio-specific data is read from the overlay — audio targets reach the board only through the circuit spec.
+
 **Board-class profiles.** The profile selects the rule envelope and the release gates:
 
 | Profile | Automation | Required human sign-off |

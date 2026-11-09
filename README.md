@@ -129,6 +129,16 @@ answer. The resolved pin map and aliases are written to
 be reused. For a KiCad-native path, import the LTspice `.asc` schematic in
 KiCad 9 and use `--schematic` instead.
 
+### Upstream: circuit-design-skill
+
+Board work from the sibling `circuit-design-skill` arrives as `<name>-pcb.json`
+(overlay), `<name>.cir` (connectivity), `<name>-pinmap.json` and
+`<name>-node-aliases.json`. Import it with the same flags shown above. The
+overlay's `"version": 1` is the handoff contract; any other version is rejected.
+No audio-specific data is read from the overlay. See
+[`references/automation-pipeline.md`](references/automation-pipeline.md) for the
+import rules.
+
 **Profiles:** `2layer-low-speed` (full automation), `4layer-impedance` / `6layer-impedance` (stackup + impedance + length-match gates; sign-off required), `rf-mixed-signal` (RF/EMC/thermal sign-off), `flex-rigid` (mechanical/flex/assembly sign-off), `high-voltage` (safety/creepage sign-off).
 
 ## Visual part selection

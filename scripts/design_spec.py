@@ -222,7 +222,8 @@ def validate_spec(spec: dict[str, Any], profile: dict[str, Any]) -> Findings:
     spec = apply_defaults(spec)
 
     if spec.get("version") != 1:
-        f.error("spec.version", "version must be 1")
+        f.error("spec.version",
+                "unsupported spec/handoff version; this build supports version 1")
     name = str(spec.get("name", ""))
     if not NAME_RE.match(name):
         f.error("spec.name", "name must be 1-64 chars of letters, digits, dot, underscore or dash")
