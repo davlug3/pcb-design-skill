@@ -45,6 +45,17 @@ def optimize_placement(
     positions: dict[str, tuple[float, float, float]] = {}
     rects: dict[str, tuple[float, float, float, float]] = {}
     nets = {ref: _nets(c) for ref, (c, _, _) in by_ref.items()}
+    proximity = cfg.get("proximity", [])
+    for rule in proximity:
+        refs = rule.get("refs", [])
+        if len(refs) != 2 or refs[0] == refs[1]:
+            raise ValueError("each placement.proximity rule requires two distinct component refs")
+        unknown = [ref for ref in refs if ref not in by_ref]
+        if unknown:
+            raise ValueError(f"placement.proximity references unknown component(s): {', '.join(unknown)}")
+        if float(rule.get("weight", 1.0)) <= 0:
+            raise ValueError("placement.proximity weight must be greater than zero")
+
     net_degree: dict[str, int] = {}
     for component_nets in nets.values():
         for net in component_nets:
@@ -101,6 +112,15 @@ def optimize_placement(
             for net in shared:
                 # Approximate routing cost; multi-drop nets are discounted.
                 cost += (abs(x - ox) + abs(y - oy)) / max(net_degree.get(net, 2) - 1, 1)
+        # Explicit component-level proximity hints are soft objectives. They
+        # guide placement without pretending to know pad-level electrical paths.
+        for rule in proximity:
+            a, b = rule["refs"]
+            other = b if a == ref else a if b == ref else None
+            if other in current:
+                ox, oy, _ = current[other]
+                weight = float(rule.get("weight", 1.0))
+                cost += weight * (abs(x - ox) + abs(y - oy))
         prefix = ref[:1].upper()
         if prefix in {"J", "X", "P"}:
             edge = min(x - margin, width - margin - x, y - margin, height - margin - y)

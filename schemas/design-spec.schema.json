@@ -163,6 +163,27 @@
         "grid_mm": {"type": "number", "exclusiveMinimum": 0, "default": 2.54},
         "clearance_mm": {"type": "number", "minimum": 0, "default": 1.0},
         "fixed_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}, "description": "Component references with explicit at coordinates that automatic placement must preserve."},
+        "proximity": {
+          "type": "array",
+          "description": "Soft component-center proximity objectives for automatic placement. Use only for known functional relationships; this does not model pad or pin locations.",
+          "items": {
+            "type": "object",
+            "required": ["refs"],
+            "additionalProperties": false,
+            "properties": {
+              "refs": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "uniqueItems": true,
+                "items": {"type": "string"},
+                "description": "The two component references to keep near one another."
+              },
+              "weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0, "description": "Relative Manhattan-distance penalty; larger values make this relationship more influential."},
+              "reason": {"type": "string", "description": "Human-readable rationale, e.g. datasheet-recommended local bypass network."}
+            }
+          }
+        },
         "keepouts": {
           "type": "array",
           "items": {

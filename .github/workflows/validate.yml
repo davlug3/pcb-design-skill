@@ -8,6 +8,8 @@ on:
       - "**/*.kicad_pcb"
       - "**/*.kicad_dru"
       - "scripts/**"
+      - "tests/**"
+      - "tests/**"
       - ".github/workflows/validate.yml"
   pull_request:
     paths:
@@ -16,6 +18,7 @@ on:
       - "**/*.kicad_pcb"
       - "**/*.kicad_dru"
       - "scripts/**"
+      - "tests/**"
       - ".github/workflows/validate.yml"
   workflow_dispatch:
 
@@ -35,6 +38,10 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.12"
+      - name: Run Python unit tests
+        env:
+          PYTHONPATH: scripts
+        run: python3 -m unittest discover -s tests -v
       - name: Validate boards with check_pcb.py
         run: |
           set -euo pipefail
