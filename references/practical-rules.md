@@ -158,6 +158,21 @@ Never let a generic rule override a device datasheet, reference design, interfac
 
 ### Placement rules (mandatory review)
 
+The automatic placer accepts optional `placement.proximity` pairs as **soft component-center objectives**. Use them to encode known functional relationships (for example, a local bypass capacitor and its IC, or a crystal and its host IC). The `weight` scales the Manhattan-distance penalty relative to the existing net-affinity objective; higher values express stronger preferences. These hints never override fixed references, board bounds, keepouts, or clearances. They do not encode pin coordinates, pad-to-pad loop length, orientation, layer, return-current geometry, thermal coupling, or datasheet-specific placement zones. Do not use a proximity pair as proof that a capacitor is close enough to a particular supply pin. Pin-aware constraints require footprint pad geometry plus device-specific pin/net mapping and must be validated against the exact datasheet/reference layout.
+
+Example:
+
+```json
+"placement": {
+  "mode": "auto",
+  "proximity": [
+    {"refs": ["C1", "U1"], "weight": 3.0, "reason": "local bypass capacitor per device layout"},
+    {"refs": ["Y1", "U1"], "weight": 2.0, "reason": "crystal near oscillator pins"}
+  ]
+}
+```
+
+
 - **Start from physical constraints:** lock board outline, mounting holes, connector locations/orientations, keepouts, enclosure interfaces, and service access before placing circuitry. Place edge-facing connectors at the relevant board edge and preserve insertion, cable, screw, and tool access.
 - **Place by current flow and function:** arrange power entry/protection/conversion, processing, analog sensing, and external interfaces so major current and signal paths are short and understandable. Keep functional blocks together; do not cluster solely because components share a net.
 - **IC decoupling is a hard placement constraint:** identify every supply pin and its recommended bypass network from the exact datasheet/reference layout. Place the appropriate high-frequency capacitor adjacent to the associated supply pin on the same layer where practical; minimize the complete supply–capacitor–IC-ground loop, connect directly to a low-inductance ground reference, and avoid routing unrelated signals through that loop. Use a dedicated nearby ground via when it shortens the return path. Do not assume one 100 nF capacitor per IC is sufficient; multi-rail, high-current, RF, and fast-switching devices may require per-pin or per-rail networks and specific values.
