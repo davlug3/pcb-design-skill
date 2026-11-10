@@ -26,6 +26,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import design_spec as ds  # noqa: E402
+import placement as placement_engine  # noqa: E402
 
 
 def require_pcbnew():
@@ -408,56 +409,17 @@ def _rects_overlap(a: tuple[float, float, float, float], b: tuple[float, float, 
 
 
 def auto_place(footprints: list[tuple[dict[str, Any], Any]], spec: dict[str, Any]) -> dict[str, tuple[float, float, float]]:
-    """Deterministic shelf packing for specs without fixed coordinates.
+    """Place footprints using net-aware deterministic optimization.
 
-    This is a safety net, not a replacement for engineering placement. The
-    report marks auto-placed boards for placement review.
+    Mechanical anchors in placement.fixed_refs retain their explicit coordinates.
+    Remaining footprints are placed by connectivity affinity, then refined by
+    coordinate descent. This is a placement heuristic, not sign-off.
     """
-    board = spec["board"]
-    width = float(board["width_mm"])
-    height = float(board["height_mm"])
-    placement = spec.get("placement", {})
-    margin = float(placement.get("margin_mm", 2.0))
-    clearance = float(placement.get("clearance_mm", 1.0))
-    step = max(float(placement.get("grid_mm", 2.54)), 1.0)
-    keepouts = placement.get("keepouts", [])
-
     entries = []
     for comp, fp in footprints:
         w, h = _footprint_bbox(fp)
-        entries.append((comp, fp, w, h))
-    entries.sort(key=lambda item: (0 if item[0]["ref"][:1] in "JXP" else 1, -(item[2] * item[3])))
-
-    placed: list[tuple[float, float, float, float]] = []
-    result: dict[str, tuple[float, float, float]] = {}
-    for comp, fp, w, h in entries:
-        chosen = None
-        if w + 2 * margin > width or h + 2 * margin > height:
-            raise RuntimeError(f"{comp['ref']} ({w:.1f} x {h:.1f} mm) does not fit on the board")
-        y = margin + h / 2
-        while y + h / 2 <= height - margin + 1e-9 and chosen is None:
-            x = margin + w / 2
-            while x + w / 2 <= width - margin + 1e-9:
-                rect = (x - w / 2, y - h / 2, x + w / 2, y + h / 2)
-                blocked = any(_rects_overlap(rect, other, clearance) for other in placed)
-                for keepout in keepouts:
-                    kx = float(keepout.get("x_mm", 0))
-                    ky = float(keepout.get("y_mm", 0))
-                    kw = float(keepout.get("width_mm", 0))
-                    kh = float(keepout.get("height_mm", 0))
-                    if _rects_overlap(rect, (kx, ky, kx + kw, ky + kh), 0):
-                        blocked = True
-                        break
-                if not blocked:
-                    chosen = (x, y)
-                    placed.append(rect)
-                    break
-                x += step
-            y += step
-        if chosen is None:
-            raise RuntimeError(f"auto-placement could not find room for {comp['ref']}")
-        result[comp["ref"]] = (chosen[0], chosen[1], float(comp.get("at", {}).get("rotation_deg", 0)))
-    return result
+        entries.append((comp, w, h))
+    return placement_engine.optimize_placement(entries, spec)
 
 
 def build(spec: dict[str, Any], output_dir: Path, footprints_dir: Path | None = None) -> Path:
