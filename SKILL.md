@@ -18,6 +18,7 @@ Create manufacturable, syntactically valid KiCad PCB files and output them as `.
 4. **No silent electrical guesses.** Pin-to-net mapping, polarity, footprint choice and safety spacing must be stated as assumptions or asked about. When a footprint/package or mechanical choice has more than one plausible answer, use the visual asker below rather than picking silently.
 5. **Do not claim fabrication compliance without verified fab limits.** Manufacturing numbers are stackup- and vendor-specific.
 6. **No release claim without a passing report.** A board is release-ready only when `report/design-report.json` says `professional_claim: true`. Otherwise list the failed gates and missing sign-offs.
+7. **Always apply the practical PCB rules.** Before every placement, routing, review, or release task, read `references/practical-rules.md` and apply its mandatory layout, return-path, fabrication, assembly, and review checklists. Manufacturer limits are checked live for the selected supplier; device-specific datasheets/reference layouts override generic defaults. Do not treat generic heuristics as sign-off.
 
 ## Automatic Design Pipeline (preferred for new boards)
 
