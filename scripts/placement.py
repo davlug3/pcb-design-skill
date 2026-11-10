@@ -45,6 +45,13 @@ def optimize_placement(
     positions: dict[str, tuple[float, float, float]] = {}
     rects: dict[str, tuple[float, float, float, float]] = {}
     nets = {ref: _nets(c) for ref, (c, _, _) in by_ref.items()}
+    pad_offsets = {
+        ref: {
+            str(net): [(float(point[0]), float(point[1])) for point in points]
+            for net, points in (comp.get("_placement_pads") or {}).items()
+        }
+        for ref, (comp, _, _) in by_ref.items()
+    }
     proximity = cfg.get("proximity", [])
     for rule in proximity:
         refs = rule.get("refs", [])
@@ -108,10 +115,25 @@ def optimize_placement(
         own = nets[ref]
         cost = 0.0
         for other, (ox, oy, _) in current.items():
+            if other == ref:
+                continue
             shared = own & nets[other]
             for net in shared:
-                # Approximate routing cost; multi-drop nets are discounted.
-                cost += (abs(x - ox) + abs(y - oy)) / max(net_degree.get(net, 2) - 1, 1)
+                # Use actual transformed pad locations when both footprints expose
+                # pad geometry. Fall back to component origins for legacy callers.
+                own_pads = pad_offsets[ref].get(net, [])
+                other_pads = pad_offsets[other].get(net, [])
+                if own_pads and other_pads:
+                    distance = min(
+                        abs((x + px) - (ox + opx)) + abs((y + py) - (oy + opy))
+                        for px, py in own_pads
+                        for opx, opy in other_pads
+                    )
+                else:
+                    distance = abs(x - ox) + abs(y - oy)
+                # Multi-drop nets are discounted; this remains a placement
+                # heuristic and does not model trace routing or return paths.
+                cost += distance / max(net_degree.get(net, 2) - 1, 1)
         # Explicit component-level proximity hints are soft objectives. They
         # guide placement without pretending to know pad-level electrical paths.
         for rule in proximity:
