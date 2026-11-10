@@ -53,6 +53,8 @@ python3 scripts/design_pipeline.py fab   build/led-blinky/led-blinky.kicad_pcb -
 
 **Canonical inputs.** `specs/<name>.json` is the source of truth for the automatic path. Use `schemas/design-spec.schema.json` and `specs/led-blinky.json` as the model. For a natural-language request, write the spec first, state assumptions in `assumptions[]`, then run the pipeline. For a KiCad schematic/netlist, the netlist is authoritative for components/pad nets; the spec overlay supplies board size, stackup, rules, placement and routing. For an LTspice/SPICE netlist, `--ltspice` derives connectivity from SPICE nodes and asks for missing pin maps, footprints, placement and node aliases with the visual picker; the overlay still supplies board size, stackup and rules. Prefer importing the `.asc` schematic into KiCad 9 when possible.
 
+**Spec keepout limitation.** `placement.keepouts` constrain component placement only; they do not create copper/routing/via keepout geometry. The automatic spec builder currently supports copper-pour zones, not geometric keepout zones. A spec with `zones[].keepout: true` is rejected rather than silently ignored; use a hand-authored KiCad keepout zone when one is required.
+
 **Upstream: `circuit-design-skill`.** Board work that starts from the sibling circuit skill arrives as four files:
 
 ```bash
@@ -74,7 +76,7 @@ The `.cir` is authoritative for connectivity; the overlay is authoritative for b
 | `flex-rigid` | Assisted | `mechanical`, `flex_bend`, `assembly` |
 | `high-voltage` | Gated; clearance/creepage checks | `safety`, `creepage` |
 
-`professional_claim` is true only when every hard gate passes **and** every required sign-off is listed in `signoff.completed`. RF, EMC, thermal, safety and flex fatigue cannot be certified by the pipeline; say so instead of overclaiming. Record a reviewer in `signoff.reviewer`.
+`professional_claim` is true only when every hard gate passes **and** every required sign-off is listed in `signoff.completed`, with non-empty `signoff.reviewer` and `signoff.date`. These fields record a human attestation; they do not independently verify reviewer qualifications. RF, EMC, thermal, safety and flex fatigue cannot be certified by the pipeline; say so instead of overclaiming.
 
 **Backend selection: local or CI (automatic).** Full automation needs `pcbnew` (KiCad 9 Python), `kicad-cli`, Java 25 and `freerouting-2.5.0.jar` (Freerouting 2.5.0 is built for Java 25). `--backend auto` is the default: it probes the current environment and runs locally when every requested stage has its tools, otherwise it dispatches `.github/workflows/design.yml`. That workflow runs in the official `kicad/kicad:9.0` container, installs a JRE 25, downloads Freerouting, runs the whole pipeline, and uploads `design-output` + `design-report`.
 
