@@ -556,7 +556,10 @@ def build(spec: dict[str, Any], output_dir: Path, footprints_dir: Path | None = 
     # Copper pour(s). The outline is inset so the pour does not touch Edge.Cuts.
     for zone_spec in spec.get("zones", []):
         if zone_spec.get("keepout"):
-            continue
+            raise ValueError(
+                "spec-driven keepout zones are not supported yet; use a "
+                "hand-authored KiCad keepout zone or omit this entry"
+            )
         net_name = zone_spec["net"]
         if net_name not in nets:
             raise RuntimeError(f"zone references undeclared net {net_name!r}")

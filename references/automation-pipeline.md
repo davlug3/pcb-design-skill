@@ -42,12 +42,21 @@ complete example. The important fields:
 | `netclasses` | Per-class width/clearance/via, optional impedance target and diff-pair geometry |
 | `nets` | Class, voltage, current, impedance, diff-pair companion |
 | `components` | Reference, value, **real KiCad library footprint**, position, pad→net map |
-| `placement` | `fixed` or `auto`, margin, grid, clearance, keepouts |
+| `placement` | `fixed` or `auto`, margin, grid, clearance, component-placement keepouts |
 | `routing` | Freerouting passes/threads/timeout/attempts |
-| `zones` | Copper pours (net/layer/clearance/min thickness) |
+| `zones` | Copper pours (net/layer/clearance/min thickness); geometric keepout zones are not yet supported by the spec builder |
 | `fabrication` | Vendor and capability limits; checked against the design rules |
-| `signoff` | Human sign-off items completed, reviewer, date, notes |
+| `signoff` | Human sign-off items completed, reviewer, date, notes; reviewer/date are required for a release claim when the profile has sign-offs |
 | `assumptions` | Explicit engineering assumptions; shown in the report |
+
+A spec entry with `zones[].keepout: true` is rejected: the current spec
+contract has no keepout boundary geometry, and the builder must not silently
+omit a requested keepout. `placement.keepouts` only constrain component
+placement; they do not create copper, routing, or via keepout geometry.
+
+A completed sign-off checklist is an attestation, not automated proof of reviewer
+qualification. The report requires a non-empty reviewer and date before it can
+make a release claim for profiles with mandatory human sign-offs.
 
 Footprints use `Library:Footprint` and resolve against
 `KICAD9_FOOTPRINT_DIR`, `KICAD_FOOTPRINT_DIR`, or `/usr/share/kicad/footprints`

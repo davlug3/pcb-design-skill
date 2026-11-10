@@ -65,6 +65,13 @@ class SpecValidationTests(unittest.TestCase):
         self.assertFalse(findings.ok)
         self.assertTrue(any(item["code"] == "fab.min_track_width_mm" for item in findings.errors))
 
+    def test_spec_keepout_zone_is_rejected_until_geometry_is_supported(self) -> None:
+        spec = led_spec()
+        spec["zones"][0]["keepout"] = True
+        findings = ds.validate_spec(spec, led_profile())
+        self.assertFalse(findings.ok)
+        self.assertTrue(any(item["code"] == "zones.keepout_unsupported" for item in findings.errors))
+
     def test_4layer_profile_requires_stackup(self) -> None:
         spec = led_spec()
         spec["profile"] = "4layer-impedance"
@@ -180,6 +187,21 @@ class GateTests(unittest.TestCase):
         )
         self.assertFalse(report["professional_claim"])
         self.assertIn("rf", report["missing_signoff"])
+
+    def test_completed_signoff_requires_reviewer_and_date(self) -> None:
+        spec = led_spec()
+        spec["profile"] = "rf-mixed-signal"
+        profile = ds.load_profile("rf-mixed-signal")
+        spec["signoff"]["completed"] = list(profile["human_signoff"])
+        findings = ds.validate_spec(spec, profile)
+        report = ds.gate_report(
+            spec,
+            profile,
+            findings,
+            {"structural": 0, "drc": 0, "unconnected": 0, "dfm": 0, "netlist_parity": 0, "stackup": 0, "length_match": 0, "fab": 0},
+        )
+        self.assertFalse(report["professional_claim"])
+        self.assertEqual(set(report["missing_signoff_metadata"]), {"reviewer", "date"})
 
     def test_hard_gate_failure_blocks_professional_claim(self) -> None:
         spec = led_spec()

@@ -202,7 +202,11 @@
           "layer": {"type": "string"},
           "clearance_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.3},
           "min_thickness_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.25},
-          "keepout": {"type": "boolean", "default": false}
+          "keepout": {
+            "type": "boolean",
+            "default": false,
+            "description": "Reserved for future geometric keepout support. true is currently rejected by semantic validation; the builder will not silently ignore it."
+          }
         }
       }
     },
