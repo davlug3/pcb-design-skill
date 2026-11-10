@@ -73,6 +73,24 @@ def optimize_placement(
                 raise ValueError(f"placement.pad_proximity references unknown pad {ref}:{pad}")
         if float(rule.get("weight", 1.0)) <= 0:
             raise ValueError("placement.pad_proximity weight must be greater than zero")
+    power_loops = cfg.get("power_loops", [])
+    for rule in power_loops:
+        for leg_name in ("supply", "return"):
+            pair = rule.get(leg_name, [])
+            if len(pair) != 2:
+                raise ValueError(f"each placement.power_loops rule requires exactly two {leg_name} pad endpoints")
+            for endpoint in pair:
+                if not isinstance(endpoint, dict) or endpoint.get("ref") not in by_ref:
+                    raise ValueError(f"placement.power_loops {leg_name} leg references an unknown component")
+                ref, pad = endpoint["ref"], str(endpoint.get("pad", ""))
+                if not pad or pad not in pad_positions[ref]:
+                    raise ValueError(f"placement.power_loops references unknown pad {ref}:{pad}")
+        endpoints = rule["supply"] + rule["return"]
+        if rule["supply"][0] == rule["supply"][1] or rule["return"][0] == rule["return"][1]:
+            raise ValueError("placement.power_loops legs must connect two distinct pads")
+        if float(rule.get("weight", 1.0)) <= 0:
+            raise ValueError("placement.power_loops weight must be greater than zero")
+
     for rule in proximity:
         refs = rule.get("refs", [])
         if len(refs) != 2 or refs[0] == refs[1]:
@@ -169,6 +187,25 @@ def optimize_placement(
             opx, opy = pad_positions[other_ref][other_pad]
             distance = abs((x + px) - (ox + opx)) + abs((y + py) - (oy + opy))
             cost += float(rule.get("weight", 1.0)) * distance
+        # A power-loop objective scores both legs: IC supply pad -> capacitor
+        # supply pad, and capacitor ground pad -> IC ground pad. This is still
+        # geometric pad distance, not routed copper inductance or return-current
+        # simulation.
+        for rule in power_loops:
+            weight = float(rule.get("weight", 1.0))
+            for leg_name in ("supply", "return"):
+                left, right = rule[leg_name]
+                if left["ref"] == ref and right["ref"] in current:
+                    own_endpoint, other_endpoint = left, right
+                elif right["ref"] == ref and left["ref"] in current:
+                    own_endpoint, other_endpoint = right, left
+                else:
+                    continue
+                other_ref = other_endpoint["ref"]
+                ox, oy, _ = current[other_ref]
+                px, py = pad_positions[ref][str(own_endpoint["pad"])]
+                opx, opy = pad_positions[other_ref][str(other_endpoint["pad"])]
+                cost += weight * (abs((x + px) - (ox + opx)) + abs((y + py) - (oy + opy)))
         # Explicit component-level proximity hints remain soft objectives.
         for rule in proximity:
             a, b = rule["refs"]
