@@ -162,6 +162,7 @@
         "margin_mm": {"type": "number", "minimum": 0, "default": 2.0},
         "grid_mm": {"type": "number", "exclusiveMinimum": 0, "default": 2.54},
         "clearance_mm": {"type": "number", "minimum": 0, "default": 1.0},
+        "fixed_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}, "description": "Component references with explicit at coordinates that automatic placement must preserve."},
         "keepouts": {
           "type": "array",
           "items": {
