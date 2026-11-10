@@ -409,16 +409,32 @@ def _rects_overlap(a: tuple[float, float, float, float], b: tuple[float, float, 
 
 
 def auto_place(footprints: list[tuple[dict[str, Any], Any]], spec: dict[str, Any]) -> dict[str, tuple[float, float, float]]:
-    """Place footprints using net-aware deterministic optimization.
+    """Place footprints using pad-aware net geometry and hard mechanical constraints.
 
-    Mechanical anchors in placement.fixed_refs retain their explicit coordinates.
-    Remaining footprints are placed by connectivity affinity, then refined by
-    coordinate descent. This is a placement heuristic, not sign-off.
+    Pad offsets come from the loaded KiCad footprint at its configured rotation.
+    They improve proximity scoring but do not model routing, current loops,
+    copper layers, return paths, or datasheet-specific placement requirements.
     """
     entries = []
     for comp, fp in footprints:
         w, h = _footprint_bbox(fp)
-        entries.append((comp, w, h))
+        pad_nets: dict[str, list[tuple[float, float]]] = {}
+        origin = fp.GetPosition()
+        ox, oy = float(origin.x) / 1_000_000.0, float(origin.y) / 1_000_000.0
+        for pad in fp.Pads():
+            pad_number = str(pad.GetNumber())
+            net_name = (comp.get("pads") or {}).get(pad_number)
+            if not net_name:
+                continue
+            position = pad.GetPosition()
+            point = (float(position.x) / 1_000_000.0 - ox,
+                     float(position.y) / 1_000_000.0 - oy)
+            pad_nets.setdefault(str(net_name), []).append(point)
+        # Keep the caller's spec component immutable; this metadata is internal
+        # to the optimizer and is never serialized into the design spec.
+        placement_comp = dict(comp)
+        placement_comp["_placement_pads"] = pad_nets
+        entries.append((placement_comp, w, h))
     return placement_engine.optimize_placement(entries, spec)
 
 
