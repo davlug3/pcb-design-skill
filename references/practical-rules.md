@@ -142,3 +142,96 @@ Example: 1 A, 10 °C rise, external, 1 oz (1.378 mil) → A ≈ 16.3 mil² → �
 3. Run `scripts/check_pcb.py --strict` and, when available, `kicad-cli pcb drc`.
 4. Recommend final checks in KiCad/fab tools: DRC, zone refill, 3D/clearance, impedance calculator/stackup confirmation, manufacturer DFM/DFA.
 5. Never claim compliance with a specific manufacturer unless the user specified it and you verified current rules.
+
+
+## Mandatory layout policy (apply to every new design and every placement/routing revision)
+
+These are engineering constraints, not aesthetic preferences. Apply them before invoking automatic placement/routing, encode what the spec and KiCad can express, and explicitly report any rule that could not be enforced. The order of authority is:
+
+1. The actual component datasheet, package/land-pattern recommendation, and vendor reference layout for that exact device and operating conditions.
+2. The selected PCB fabricator's **current** capability table, stackup, and DFM feedback; and the selected assembler's assembly/fiducial/panel requirements.
+3. Applicable IPC/IEC/UL standards and interface specifications.
+4. The defaults and heuristics in this document.
+5. Generic layout conventions or aesthetic preferences.
+
+Never let a generic rule override a device datasheet, reference design, interface standard, or confirmed manufacturing constraint. If the fabricator or assembler is not selected, use conservative prototype defaults, label them as assumptions, and do not claim vendor-specific compliance.
+
+### Placement rules (mandatory review)
+
+- **Start from physical constraints:** lock board outline, mounting holes, connector locations/orientations, keepouts, enclosure interfaces, and service access before placing circuitry. Place edge-facing connectors at the relevant board edge and preserve insertion, cable, screw, and tool access.
+- **Place by current flow and function:** arrange power entry/protection/conversion, processing, analog sensing, and external interfaces so major current and signal paths are short and understandable. Keep functional blocks together; do not cluster solely because components share a net.
+- **IC decoupling is a hard placement constraint:** identify every supply pin and its recommended bypass network from the exact datasheet/reference layout. Place the appropriate high-frequency capacitor adjacent to the associated supply pin on the same layer where practical; minimize the complete supply–capacitor–IC-ground loop, connect directly to a low-inductance ground reference, and avoid routing unrelated signals through that loop. Use a dedicated nearby ground via when it shortens the return path. Do not assume one 100 nF capacitor per IC is sufficient; multi-rail, high-current, RF, and fast-switching devices may require per-pin or per-rail networks and specific values.
+- **Crystals/clock sources:** follow the IC/vendor reference layout; keep resonator and load components close to the pins, minimize loop area, preserve symmetry where specified, and keep noisy/high-speed traces and copper aggressors away. Do not route unrelated signals beneath the resonator unless the reference design explicitly permits it.
+- **Switch-mode power:** place input ceramic capacitors, switching IC/FETs, catch diode/synchronous path, and inductor to minimize the high-di/dt hot loop. Keep SW copper only as large as electrically/thermally necessary and away from feedback, analog, antenna, and connector regions. Place output capacitors at the inductor/load return as specified by the controller datasheet. Treat vendor priority-layout diagrams as authoritative.
+- **Analog/mixed signal:** group sensitive inputs, references, amplifiers, ADCs and their local filters. Keep them away from switch nodes, inductors, clocks and high-current paths. Prefer a continuous reference plane and placement-based functional partitioning; do not split ground reflexively. If a split is genuinely required, document the return-current strategy and ensure signals never cross a reference discontinuity.
+- **RF/antenna:** follow the exact module/chip reference layout, antenna keepout, ground-via fence, feed geometry and stackup. Do not let autorouting alter antenna geometry or controlled-impedance feeds. RF placement/routing requires manual review and the profile's RF/EMC sign-off.
+- **Thermal:** identify dissipative parts from worst-case power, not nominal current alone. Provide copper spreading, thermal vias, heatsink/mechanical clearance and airflow as required by thermal analysis and package guidance. Keep temperature-sensitive sensors, references, crystals and electrolytics away from heat sources.
+- **Assembly/serviceability:** respect courtyard and pick-and-place clearances; align similar parts consistently where useful; preserve polarity/pin-1 visibility, readable references, probe access, connector mating space and rework access. Never rotate polarized or asymmetric parts without checking pin mapping and assembly orientation.
+
+### Routing and return-path rules (mandatory review)
+
+- Establish a continuous reference plane for fast or sensitive signals. Route each signal over its intended reference; do not cross plane splits, voids, antipads or large cutouts that force return current to detour.
+- Minimize high-frequency current-loop area. For switching converters, follow the datasheet's ordered placement/routing priorities; keep hot loops short and compact and prevent SW copper from becoming an unintended radiator.
+- Route critical clocks, USB/Ethernet/DDR/LVDS and other fast-edge nets according to the applicable interface specification and stackup. Define impedance from the actual fab stackup and field-solver/calculator result; do not infer impedance from nominal trace width.
+- Differential pairs require controlled width/gap, consistent coupling, symmetry, continuous reference, appropriate pair-to-pair skew limits, and minimal/as-symmetric-as-possible transitions. Do not apply arbitrary length matching where no timing requirement exists.
+- Place return vias adjacent to signal vias when a high-speed signal changes reference layers. Avoid stubs and unnecessary layer changes.
+- Size every power, ground, connector, fuse, via and neck-down bottleneck for continuous current, transient current, temperature rise, copper weight, ambient temperature and allowed voltage drop. Do not use a generic trace-width table as final sign-off; use IPC-2152 or validated thermal analysis and inspect the narrowest segment.
+- Use 45-degree or curved corners where practical; avoid acute angles and unnecessary stubs. A 3W spacing rule is only a preliminary crosstalk heuristic, not a substitute for stackup-, edge-rate-, and geometry-aware SI analysis.
+- Never allow autorouter completion to substitute for review of current loops, return paths, impedance, crosstalk, thermal bottlenecks, or sensitive analog/RF geometry.
+
+### Fabrication and assembly rules (mandatory)
+
+- Before finalizing geometry, select the actual fab/assembler where possible and retrieve its current capabilities for layer count, material, finished thickness, copper weight, trace/space, drill and via types, annular ring, aspect ratio, solder-mask registration/dam, copper-to-edge, slots, edge plating, surface finish, impedance control, and tolerances.
+- Use ordinary-process capabilities rather than the vendor's advertised extreme/HDI limits unless the user explicitly accepts the cost, yield, and process tradeoffs and the vendor confirms the design.
+- Keep copper-to-edge, hole-to-edge, NPTH-to-copper, solder-mask, silkscreen-to-pad, and component-to-edge clearances within the selected supplier's rules. Distinguish copper clearance from component-body/courtyard clearance.
+- Avoid unnecessarily tiny drills, narrow traces/spaces, slivers, acute copper features, isolated copper islands, and excessive via-in-pad. Use via-in-pad only when the process supports the required fill/cap/plating and assembly method.
+- Use solder-mask openings and paste apertures appropriate to the package and assembly process. Confirm exposed-pad stencil/paste segmentation and thermal-via treatment against the component and assembler guidance.
+- Add global fiducials, local fiducials, tooling holes, rails, breakaway tabs, and panel features only to the selected assembler's requirements. Do not invent panelization geometry when the fabricator/assembler has not specified it.
+- Ensure polarity, pin 1, reference designators, test points, connector labels, revision, and safety markings remain readable after assembly. Keep silkscreen off exposed pads and holes.
+- Deliver fabrication and assembly outputs as a matched release set: Gerbers, NC drill, board outline, stackup/material notes, drill map, BOM, pick-and-place/centroid, assembly drawings, and IPC-D-356 or equivalent netlist where supported. Check that all files correspond to the same final board revision.
+
+### Mandatory design review checklist
+
+Before calling placement complete, review and record:
+- [ ] Board outline, mounting, connector orientation, enclosure and keepouts are satisfied.
+- [ ] Every IC's supply pins and datasheet-recommended bypass network were identified; capacitor placement and return loops were inspected.
+- [ ] Switching hot loops, crystal/clock placement, analog/RF separation and thermal hot spots were reviewed where applicable.
+- [ ] Functional blocks follow the intended signal and power flow; connector and service access are preserved.
+- [ ] Critical nets and reference-plane continuity are identified before routing.
+
+Before calling routing complete, review and record:
+- [ ] Current/voltage-drop/temperature rise are checked for traces, vias, connectors, fuses and neck-downs.
+- [ ] High-speed/RF/differential nets have appropriate stackup, reference, impedance and length/skew constraints.
+- [ ] Return paths are continuous; no critical trace crosses a plane gap or split.
+- [ ] Hot-loop area, SW-node copper, crosstalk, stubs and layer transitions are reviewed.
+- [ ] All zones are refilled; DRC, unconnected-net, netlist-parity and DFM reports are inspected.
+
+Before release, confirm:
+- [ ] Fabricator and assembler rules were checked against the actual final geometry and output files.
+- [ ] Gerber/drill/position/BOM/assembly files match the same revision and were inspected in a Gerber viewer or vendor DFM tool.
+- [ ] All unresolved assumptions, deviations, warnings and human sign-offs are disclosed. A passing DRC is necessary but does not prove electrical, thermal, EMC, safety, or assembly correctness.
+
+### Source hierarchy and reference reading
+
+Use manufacturing sources first for process limits; use semiconductor-vendor application notes and reference designs for device-specific layout; use standards and technical books for underlying engineering principles. Re-check online limits on each project because capabilities change.
+
+**Manufacturing / assembly sources (priority for manufacturability):**
+- JLCPCB, PCB capabilities and process limits: https://jlcpcb.com/capabilities/pcb-capabilities
+- JLCPCB, PCB design rules / DFM guidance: https://jlcpcb.com/blog/a-comprehensive-guide-for-optimal-results
+- Sierra Circuits, DFM rules (silkscreen, mask and manufacturing clearances): https://www.protoexpress.com/kb/dfm-rules/
+- CBS PCB, DFM guidelines (example conventional trace, spacing, edge and hole rules): https://cbspcb.com/dfm/
+- For each order, the selected supplier's live capability/stackup page and its generated DFM report supersede these examples.
+
+**Semiconductor vendor layout sources (priority for device-specific electrical layout):**
+- Texas Instruments, *CC13xx/CC26xx Hardware Configuration and PCB Design Considerations*: https://www.ti.com/lit/pdf/swra640 (decoupling, ground return, RF and device layout)
+- Texas Instruments, *High-Speed Layout Guidelines*: https://www.ti.com/lit/an/scaa082a/scaa082a.pdf (return paths, plane continuity, loop area)
+- Analog Devices, *Basic Guidelines for Layout Design of Mixed-Signal PCBs*: https://www.analog.com/en/resources/analog-dialogue/articles/what-are-the-basic-guidelines-for-layout-design-of-mixed-signal-pcbs.html
+
+**Technical books (principles and deeper study; not substitutes for current vendor process data):**
+- Clyde F. Coombs Jr. and Happy T. Holden, *Printed Circuits Handbook*, 7th ed., McGraw-Hill, 2016. Especially Chapters 4–7 (DFM, manufacturing information, supplier qualification/process control), 16 (planning design/fabrication/assembly), 20–23 (electrical/mechanical design, SI/PI/EMC, current capacity and thermal design). Publisher: https://www.mheducation.com/highered/mhp/product/printed-circuits-handbook-seventh-edition.html
+- Henry W. Ott, *Electromagnetic Compatibility Engineering*, Wiley, 2009. Grounding, bonding, return currents, shielding and EMC principles.
+- Bruce R. Archambeault, *PCB Design for Real-World EMI Control*, Kluwer Academic Publishers, 2002. Practical EMC-oriented placement and routing principles.
+- Howard Johnson and Martin Graham, *High-Speed Digital Design: A Handbook of Black Magic*, Prentice Hall, 1993. Transmission-line behavior, reflections, termination and high-speed layout.
+- Douglas Brooks, *PCB Currents: How They Flow, How They React*, Prentice Hall, 2013. Current paths, return currents and PCB behavior.
+
+When sources conflict, prefer the most specific and authoritative source for the issue: device datasheet/reference design for that device; chosen manufacturer's current process data for fabrication; applicable standard for compliance; then established technical literature. Do not copy numerical rules from books or articles without checking their assumptions and current supplier capability.
