@@ -115,6 +115,8 @@ def optimize_placement(
         own = nets[ref]
         cost = 0.0
         for other, (ox, oy, _) in current.items():
+            if other == ref:
+                continue
             shared = own & nets[other]
             for net in shared:
                 # Use actual transformed pad locations when both footprints expose
