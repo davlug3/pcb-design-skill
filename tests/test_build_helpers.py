@@ -101,6 +101,58 @@ class FootprintPathTests(unittest.TestCase):
                 pcb_build.footprint_paths("NoSuchLib:NoSuchPart", Path(tmp))
 
 
+class AutomaticPlacementTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.spec = {
+            "board": {"width_mm": 30, "height_mm": 20},
+            "placement": {"mode": "auto", "margin_mm": 2, "clearance_mm": 1, "grid_mm": 2.54},
+        }
+
+    def test_net_connected_components_are_placed_close_and_deterministically(self) -> None:
+        entries = [
+            ({"ref": "U1", "pads": {"1": "SIGNAL", "2": "GND"}}, 4.0, 4.0),
+            ({"ref": "R1", "pads": {"1": "SIGNAL"}}, 2.0, 2.0),
+            ({"ref": "C1", "pads": {"1": "GND"}}, 2.0, 2.0),
+            ({"ref": "R9", "pads": {"1": "UNRELATED"}}, 2.0, 2.0),
+        ]
+        first = pcb_build.placement_engine.optimize_placement(entries, self.spec)
+        second = pcb_build.placement_engine.optimize_placement(entries, self.spec)
+        self.assertEqual(first, second)
+        signal_distance = abs(first["U1"][0] - first["R1"][0]) + abs(first["U1"][1] - first["R1"][1])
+        unrelated_distance = abs(first["U1"][0] - first["R9"][0]) + abs(first["U1"][1] - first["R9"][1])
+        self.assertLess(signal_distance, unrelated_distance)
+
+    def test_fixed_reference_keeps_explicit_coordinates(self) -> None:
+        self.spec["placement"]["fixed_refs"] = ["J1"]
+        entries = [
+            ({"ref": "J1", "at": {"x_mm": 5, "y_mm": 5}, "pads": {"1": "VCC"}}, 3.0, 3.0),
+            ({"ref": "R1", "pads": {"1": "VCC"}}, 2.0, 2.0),
+        ]
+        result = pcb_build.placement_engine.optimize_placement(entries, self.spec)
+        self.assertEqual(result["J1"], (5.0, 5.0, 0.0))
+
+    def test_fixed_reference_rejects_missing_coordinates(self) -> None:
+        self.spec["placement"]["fixed_refs"] = ["J1"]
+        entries = [({"ref": "J1", "pads": {}}, 3.0, 3.0)]
+        with self.assertRaisesRegex(ValueError, "requires at.x_mm"):
+            pcb_build.placement_engine.optimize_placement(entries, self.spec)
+
+    def test_keepout_is_respected(self) -> None:
+        self.spec["placement"]["keepouts"] = [
+            {"x_mm": 2, "y_mm": 2, "width_mm": 10, "height_mm": 10}
+        ]
+        entries = [({"ref": "R1", "pads": {}}, 3.0, 3.0)]
+        result = pcb_build.placement_engine.optimize_placement(entries, self.spec)
+        x, y, _ = result["R1"]
+        self.assertFalse(2 <= x <= 12 and 2 <= y <= 12)
+
+    def test_placement_fails_when_board_is_too_small(self) -> None:
+        self.spec["board"] = {"width_mm": 5, "height_mm": 5}
+        entries = [({"ref": "U1", "pads": {}}, 4.0, 4.0)]
+        with self.assertRaisesRegex(RuntimeError, "could not find room"):
+            pcb_build.placement_engine.optimize_placement(entries, self.spec)
+
+
 class FabOutputTests(unittest.TestCase):
     def _fake_cli(self, directory: Path) -> Path:
         path = directory / "kicad-cli"
