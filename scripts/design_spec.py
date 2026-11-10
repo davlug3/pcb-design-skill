@@ -363,6 +363,17 @@ def validate_spec(spec: dict[str, Any], profile: dict[str, Any]) -> Findings:
                     f"class width is {actual_w:.2f} mm",
                 )
 
+    # The current spec builder only supports copper-pour zones. A boolean
+    # keepout flag has no geometric boundary, so silently skipping it would
+    # produce a board that violates the user's stated intent.
+    for index, zone in enumerate(spec.get("zones", [])):
+        if isinstance(zone, dict) and zone.get("keepout") is True:
+            f.error(
+                "zones.keepout_unsupported",
+                f"zones[{index}].keepout is not supported by the spec builder; "
+                "use a hand-authored KiCad keepout zone or omit it",
+            )
+
     components = spec.get("components", [])
     if not components:
         f.error("components.empty", "at least one component is required")
@@ -755,6 +766,17 @@ def gate_report(
     if missing_signoff:
         failures.append("signoff:" + ",".join(missing_signoff))
 
+    # A completed checklist is an attestation, not proof of competence. At
+    # minimum, preserve who signed and when before allowing a release claim.
+    missing_signoff_metadata: list[str] = []
+    if required_signoff and not missing_signoff:
+        if not str(signoff.get("reviewer", "")).strip():
+            missing_signoff_metadata.append("reviewer")
+        if not str(signoff.get("date", "")).strip():
+            missing_signoff_metadata.append("date")
+    if missing_signoff_metadata:
+        failures.append("signoff_metadata:" + ",".join(missing_signoff_metadata))
+
     professional = not failures
     return {
         "name": spec.get("name"),
@@ -766,6 +788,7 @@ def gate_report(
         "required_signoff": required_signoff,
         "completed_signoff": sorted(completed),
         "missing_signoff": missing_signoff,
+        "missing_signoff_metadata": missing_signoff_metadata,
         "gates": gates,
         "automated": automated,
         "findings": findings.to_dict(),
