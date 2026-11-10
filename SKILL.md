@@ -207,7 +207,8 @@ Use the automatic pipeline first. This workflow is for reviewing a generated boa
 
 4. **Place footprints.**
    - Use complete embedded footprint definitions: `layer`, `uuid`, `at`, `property` fields (`Reference`/`Value`), `attr smd|through_hole`, pads, silkscreen, `F.CrtYd`/`B.CrtYd` courtyard, and optionally `F.Fab` and a 3D model.
-   - Place by function: connectors, power entry and MCU first; group related circuits; separate analog/digital/noisy domains.
+   - Automatic placement uses a deterministic connectivity-aware heuristic: hard anchors from `placement.fixed_refs`, connector edge preference, shared-net distance scoring, footprint bounding boxes, board bounds, clearances and keepouts, followed by coordinate-descent refinement. It is a starting layout only; it does not infer decoupling proximity, thermal behavior, impedance, return paths or connector orientation. Review placement and require routing/DRC before release.
+    - Place by function: connectors, power entry and MCU first; group related circuits; separate analog/digital/noisy domains.
    - Put decoupling capacitors at each IC power/ground pin with minimal loop area; values/packages per datasheet or stated assumptions.
    - Respect courtyard and assembly spacing; keep references readable and polarized parts marked.
 
