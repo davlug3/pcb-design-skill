@@ -419,6 +419,7 @@ def auto_place(footprints: list[tuple[dict[str, Any], Any]], spec: dict[str, Any
     for comp, fp in footprints:
         w, h = _footprint_bbox(fp)
         pad_nets: dict[str, list[tuple[float, float]]] = {}
+        pad_numbers: dict[str, tuple[float, float]] = {}
         origin = fp.GetPosition()
         ox, oy = float(origin.x) / 1_000_000.0, float(origin.y) / 1_000_000.0
         for pad in fp.Pads():
@@ -429,11 +430,13 @@ def auto_place(footprints: list[tuple[dict[str, Any], Any]], spec: dict[str, Any
             position = pad.GetPosition()
             point = (float(position.x) / 1_000_000.0 - ox,
                      float(position.y) / 1_000_000.0 - oy)
+            pad_numbers[pad_number] = point
             pad_nets.setdefault(str(net_name), []).append(point)
         # Keep the caller's spec component immutable; this metadata is internal
         # to the optimizer and is never serialized into the design spec.
         placement_comp = dict(comp)
         placement_comp["_placement_pads"] = pad_nets
+        placement_comp["_placement_pad_numbers"] = pad_numbers
         entries.append((placement_comp, w, h))
     return placement_engine.optimize_placement(entries, spec)
 
