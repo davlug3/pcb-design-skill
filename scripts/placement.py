@@ -52,7 +52,27 @@ def optimize_placement(
         }
         for ref, (comp, _, _) in by_ref.items()
     }
+    pad_positions = {
+        ref: {
+            str(pad): (float(point[0]), float(point[1]))
+            for pad, point in (comp.get("_placement_pad_numbers") or {}).items()
+        }
+        for ref, (comp, _, _) in by_ref.items()
+    }
     proximity = cfg.get("proximity", [])
+    pad_proximity = cfg.get("pad_proximity", [])
+    for rule in pad_proximity:
+        pair = rule.get("pads", [])
+        if len(pair) != 2:
+            raise ValueError("each placement.pad_proximity rule requires exactly two pad endpoints")
+        for endpoint in pair:
+            if not isinstance(endpoint, dict) or endpoint.get("ref") not in by_ref:
+                raise ValueError("placement.pad_proximity references an unknown component")
+            ref, pad = endpoint["ref"], str(endpoint.get("pad", ""))
+            if not pad or pad not in pad_positions[ref]:
+                raise ValueError(f"placement.pad_proximity references unknown pad {ref}:{pad}")
+        if float(rule.get("weight", 1.0)) <= 0:
+            raise ValueError("placement.pad_proximity weight must be greater than zero")
     for rule in proximity:
         refs = rule.get("refs", [])
         if len(refs) != 2 or refs[0] == refs[1]:
@@ -134,8 +154,22 @@ def optimize_placement(
                 # Multi-drop nets are discounted; this remains a placement
                 # heuristic and does not model trace routing or return paths.
                 cost += distance / max(net_degree.get(net, 2) - 1, 1)
-        # Explicit component-level proximity hints are soft objectives. They
-        # guide placement without pretending to know pad-level electrical paths.
+        # Explicit pad-to-pad objectives target known electrical pins (for
+        # example, a particular IC supply pad and its bypass-capacitor pad).
+        for rule in pad_proximity:
+            left, right = rule["pads"]
+            if left["ref"] == ref and right["ref"] in current:
+                own_ref, own_pad, other_ref, other_pad = left["ref"], str(left["pad"]), right["ref"], str(right["pad"])
+            elif right["ref"] == ref and left["ref"] in current:
+                own_ref, own_pad, other_ref, other_pad = right["ref"], str(right["pad"]), left["ref"], str(left["pad"])
+            else:
+                continue
+            ox, oy, _ = current[other_ref]
+            px, py = pad_positions[own_ref][own_pad]
+            opx, opy = pad_positions[other_ref][other_pad]
+            distance = abs((x + px) - (ox + opx)) + abs((y + py) - (oy + opy))
+            cost += float(rule.get("weight", 1.0)) * distance
+        # Explicit component-level proximity hints remain soft objectives.
         for rule in proximity:
             a, b = rule["refs"]
             other = b if a == ref else a if b == ref else None
