@@ -137,8 +137,8 @@ def board_dfm(spec: dict[str, Any], board_path: Path) -> dict[str, Any]:
     tracks = []
     try:
         tracks = list(board.GetTracks())
-    except Exception:
-        tracks = []
+    except Exception as exc:
+        findings.error("dfm.track_inspection", f"could not inspect board tracks: {exc}")
 
     for track in tracks:
         is_via = hasattr(track, "GetDrillValue")
@@ -155,15 +155,15 @@ def board_dfm(spec: dict[str, Any], board_path: Path) -> dict[str, Any]:
                     findings.error("dfm.via_drill", f"via drill {drill:.3f} mm is below {min_drill:.3f} mm")
                 if (diameter - drill) / 2 + 1e-9 < min_annular:
                     findings.error("dfm.annular", f"via annular ring is below {min_annular:.3f} mm")
-            except Exception:
-                pass
+            except Exception as exc:
+                findings.error("dfm.via_inspection", f"could not inspect via dimensions: {exc}")
         else:
             try:
                 width = track.GetWidth() / 1_000_000.0
                 if width + 1e-9 < min_track:
                     findings.error("dfm.track_width", f"track width {width:.3f} mm is below {min_track:.3f} mm")
-            except Exception:
-                pass
+            except Exception as exc:
+                findings.error("dfm.track_inspection", f"could not inspect track width: {exc}")
 
     # Hole-to-hole spacing across pads and vias.
     holes: list[tuple[float, float, float]] = []
@@ -177,10 +177,10 @@ def board_dfm(spec: dict[str, Any], board_path: Path) -> dict[str, Any]:
                     if dx > 0 or dy > 0:
                         pos = pad.GetPosition()
                         holes.append((pos.x / 1_000_000.0, pos.y / 1_000_000.0, max(dx, dy)))
-                except Exception:
-                    pass
-    except Exception:
-        pass
+                except Exception as exc:
+                    findings.error("dfm.hole_inspection", f"could not inspect footprint pad drill: {exc}")
+    except Exception as exc:
+        findings.error("dfm.hole_inspection", f"could not inspect footprint holes: {exc}")
     min_hole_gap = float(rules.get("min_hole_to_hole_mm", 0.5))
     hole_errors = 0
     for i, (x1, y1, d1) in enumerate(holes):
