@@ -515,7 +515,7 @@
     },
     {
       "ref": "U1",
-      "value": "TL082 dual op-amp (merged X1A+X3A)",
+      "value": "TL082",
       "footprint": "Package_DIP:DIP-8_W7.62mm",
       "dnp": false,
       "pads": {
@@ -540,7 +540,7 @@
     },
     {
       "ref": "X2",
-      "value": "1M Drive pot (rheostat)",
+      "value": "1M",
       "footprint": "Potentiometer_THT:Potentiometer_Alpha_RD901F-40-00D_Single_Vertical",
       "dnp": false,
       "pads": {
@@ -560,7 +560,7 @@
     },
     {
       "ref": "X4",
-      "value": "10k Tone pot (rheostat)",
+      "value": "10k",
       "footprint": "Potentiometer_THT:Potentiometer_Alpha_RD901F-40-00D_Single_Vertical",
       "dnp": false,
       "pads": {
@@ -580,7 +580,7 @@
     },
     {
       "ref": "X5",
-      "value": "100k Volume pot",
+      "value": "100k",
       "footprint": "Potentiometer_THT:Potentiometer_Alpha_RD901F-40-00D_Single_Vertical",
       "dnp": false,
       "pads": {
@@ -600,7 +600,7 @@
     },
     {
       "ref": "J_IN",
-      "value": "1/4in TRS input jack (ring = battery disconnect)",
+      "value": "NMJ6HFD2",
       "footprint": "Connector_Audio:Jack_6.35mm_Neutrik_NMJ6HFD2_Horizontal",
       "dnp": false,
       "pads": {
@@ -614,7 +614,7 @@
     },
     {
       "ref": "J_OUT",
-      "value": "1/4in TS output jack",
+      "value": "NMJ4HFD2",
       "footprint": "Connector_Audio:Jack_6.35mm_Neutrik_NMJ4HFD2_Horizontal",
       "dnp": false,
       "pads": {
@@ -624,7 +624,7 @@
     },
     {
       "ref": "J_PWR",
-      "value": "9V DC jack, center-negative, switched",
+      "value": "PJ-102AH",
       "footprint": "Connector_BarrelJack:BarrelJack_CUI_PJ-102AH_Horizontal",
       "dnp": false,
       "pads": {
@@ -638,7 +638,7 @@
     },
     {
       "ref": "BT1",
-      "value": "9V battery snap header",
+      "value": "BATT",
       "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
       "dnp": false,
       "pads": {
@@ -648,7 +648,7 @@
     },
     {
       "ref": "SW_FS",
-      "value": "3PDT true-bypass interface (2x05 header)",
+      "value": "3PDT",
       "footprint": "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical",
       "dnp": false,
       "pads": {
@@ -667,7 +667,7 @@
     },
     {
       "ref": "SW_HP",
-      "value": "HP/LP toggle interface (1x03 header)",
+      "value": "HP/LP",
       "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
       "dnp": false,
       "pads": {
