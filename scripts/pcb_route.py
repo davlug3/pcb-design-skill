@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import design_spec as ds  # noqa: E402
 import pcb_build  # noqa: E402
 import route_metrics  # noqa: E402
+import routing_feedback  # noqa: E402
 
 
 def require_pcbnew():
@@ -269,16 +270,79 @@ def route(
     except Exception:
         pass
     metrics = route_metrics.collect_board_metrics(require_pcbnew().LoadBoard(str(board_path)))
+    selected_attempt = best_path.parent.name
+    feedback_report: dict[str, Any] = {"enabled": False, "rounds": []}
+    feedback_rounds = int(routing.get("feedback_rounds", 0))
+    if feedback_rounds and spec.get("placement", {}).get("mode") == "auto":
+        feedback_report["enabled"] = True
+        top_nets = int(routing.get("feedback_top_nets", 3))
+        feedback_weight = float(routing.get("feedback_weight", 1.0))
+        for round_index in range(1, feedback_rounds + 1):
+            feedback_spec, rules = routing_feedback.build_feedback_spec(
+                spec, metrics, top_nets=top_nets, weight=feedback_weight
+            )
+            critical_nets = sorted(
+                (str(net) for net, length in (metrics.get("track_length_by_net_mm") or {}).items()
+                 if float(length) > 0),
+                key=lambda net: (-float(metrics["track_length_by_net_mm"][net]), net),
+            )[:top_nets]
+            if not rules or not critical_nets:
+                feedback_report["rounds"].append({
+                    "round": round_index, "accepted": False,
+                    "reason": "no eligible routed multi-component nets",
+                })
+                break
+            try:
+                feedback_spec["routing"]["feedback_rounds"] = 0
+                candidate_dir = output_dir / f"feedback-round-{round_index}"
+                candidate_board = pcb_build.build(feedback_spec, candidate_dir)
+                candidate_result = route(
+                    feedback_spec, candidate_board, candidate_dir,
+                    freerouting_jar=freerouting_jar, attempts=attempts
+                )
+            except Exception as exc:
+                feedback_report["rounds"].append({
+                    "round": round_index, "accepted": False,
+                    "reason": f"candidate build/route failed: {exc}",
+                })
+                break
+            candidate_metrics = candidate_result["metrics"]
+            before = routing_feedback.quality_key(metrics, critical_nets)
+            after = routing_feedback.quality_key(candidate_metrics, critical_nets)
+            accepted = after < before
+            feedback_report["rounds"].append({
+                "round": round_index,
+                "critical_nets": critical_nets,
+                "generated_objectives": rules,
+                "before": {"unconnected_items": metrics.get("unconnected_items"), "critical_net_length_mm": before[1], "via_count": metrics.get("via_count")},
+                "after": {"unconnected_items": candidate_metrics.get("unconnected_items"), "critical_net_length_mm": after[1], "via_count": candidate_metrics.get("via_count")},
+                "accepted": accepted,
+                "candidate_board": candidate_result.get("board"),
+            })
+            if not accepted:
+                break
+            shutil.copy2(candidate_board, board_path)
+            metrics = candidate_metrics
+            selected_attempt = candidate_result.get("selected_attempt", selected_attempt)
+            results.extend(candidate_result.get("attempts", []))
+            best_score = (
+                int(metrics.get("unconnected_items", best_score[0])),
+                int(metrics.get("track_segment_count", best_score[1])),
+            )
     metrics_path = output_dir / "route-metrics.json"
     metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
+    feedback_path = output_dir / "route-feedback.json"
+    feedback_path.write_text(json.dumps(feedback_report, indent=2) + "\n", encoding="utf-8")
     return {
         "attempts": results,
-        "selected_attempt": best_path.parent.name,
-        "unconnected": best_score[0],
-        "tracks": best_score[1],
+        "selected_attempt": selected_attempt,
+        "unconnected": metrics.get("unconnected_items", best_score[0]),
+        "tracks": metrics.get("track_segment_count", best_score[1]),
         "board": str(board_path),
         "metrics": metrics,
         "metrics_report": str(metrics_path),
+        "feedback": feedback_report,
+        "feedback_report": str(feedback_path),
     }
 
 

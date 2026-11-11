@@ -179,6 +179,9 @@ def apply_defaults(spec: dict[str, Any]) -> dict[str, Any]:
     routing.setdefault("timeout_s", 900)
     routing.setdefault("attempts", 3)
     routing.setdefault("optimize", True)
+    routing.setdefault("feedback_rounds", 0)
+    routing.setdefault("feedback_top_nets", 3)
+    routing.setdefault("feedback_weight", 1.0)
 
     s.setdefault("zones", [])
     s.setdefault("fabrication", {})
@@ -224,6 +227,17 @@ def validate_spec(spec: dict[str, Any], profile: dict[str, Any]) -> Findings:
     if spec.get("version") != 1:
         f.error("spec.version",
                 "unsupported spec/handoff version; this build supports version 1")
+    routing_cfg = spec.get("routing", {})
+    feedback_rounds = _int(routing_cfg.get("feedback_rounds"), 0)
+    feedback_top_nets = _int(routing_cfg.get("feedback_top_nets"), 3)
+    feedback_weight = _num(routing_cfg.get("feedback_weight"))
+    if feedback_rounds < 0 or feedback_rounds > 2:
+        f.error("routing.feedback_rounds", "routing.feedback_rounds must be between 0 and 2")
+    if feedback_top_nets < 1 or feedback_top_nets > 10:
+        f.error("routing.feedback_top_nets", "routing.feedback_top_nets must be between 1 and 10")
+    if feedback_weight <= 0:
+        f.error("routing.feedback_weight", "routing.feedback_weight must be greater than zero")
+
     name = str(spec.get("name", ""))
     if not NAME_RE.match(name):
         f.error("spec.name", "name must be 1-64 chars of letters, digits, dot, underscore or dash")
