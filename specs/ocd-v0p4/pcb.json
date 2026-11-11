@@ -661,8 +661,8 @@
       "dnp": false,
       "pads": {},
       "at": {
-        "x_mm": 4.5,
-        "y_mm": 4.5,
+        "x_mm": 7.0,
+        "y_mm": 7.0,
         "rotation_deg": 0.0,
         "side": "front"
       },
@@ -677,8 +677,8 @@
       "dnp": false,
       "pads": {},
       "at": {
-        "x_mm": 103.5,
-        "y_mm": 4.5,
+        "x_mm": 101.0,
+        "y_mm": 7.0,
         "rotation_deg": 0.0,
         "side": "front"
       },
@@ -693,8 +693,8 @@
       "dnp": false,
       "pads": {},
       "at": {
-        "x_mm": 4.5,
-        "y_mm": 53.5,
+        "x_mm": 7.0,
+        "y_mm": 51.0,
         "rotation_deg": 0.0,
         "side": "front"
       },
@@ -709,8 +709,8 @@
       "dnp": false,
       "pads": {},
       "at": {
-        "x_mm": 103.5,
-        "y_mm": 53.5,
+        "x_mm": 101.0,
+        "y_mm": 51.0,
         "rotation_deg": 0.0,
         "side": "front"
       },
