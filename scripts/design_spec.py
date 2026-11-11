@@ -228,12 +228,14 @@ def validate_spec(spec: dict[str, Any], profile: dict[str, Any]) -> Findings:
         f.error("spec.version",
                 "unsupported spec/handoff version; this build supports version 1")
     routing_cfg = spec.get("routing", {})
-    feedback_rounds = _int(routing_cfg.get("feedback_rounds"), 0)
-    feedback_top_nets = _int(routing_cfg.get("feedback_top_nets"), 3)
+    feedback_rounds_raw = routing_cfg.get("feedback_rounds", 0)
+    feedback_top_nets_raw = routing_cfg.get("feedback_top_nets", 3)
+    feedback_rounds = _int(feedback_rounds_raw, -1)
+    feedback_top_nets = _int(feedback_top_nets_raw, -1)
     feedback_weight = _num(routing_cfg.get("feedback_weight"))
-    if feedback_rounds < 0 or feedback_rounds > 2:
+    if isinstance(feedback_rounds_raw, bool) or not isinstance(feedback_rounds_raw, int) or feedback_rounds < 0 or feedback_rounds > 2:
         f.error("routing.feedback_rounds", "routing.feedback_rounds must be between 0 and 2")
-    if feedback_top_nets < 1 or feedback_top_nets > 10:
+    if isinstance(feedback_top_nets_raw, bool) or not isinstance(feedback_top_nets_raw, int) or feedback_top_nets < 1 or feedback_top_nets > 10:
         f.error("routing.feedback_top_nets", "routing.feedback_top_nets must be between 1 and 10")
     if feedback_weight <= 0:
         f.error("routing.feedback_weight", "routing.feedback_weight must be greater than zero")
