@@ -28,6 +28,7 @@ from typing import Any
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import design_spec as ds  # noqa: E402
 import pcb_build  # noqa: E402
+import route_metrics  # noqa: E402
 
 
 def require_pcbnew():
@@ -267,12 +268,17 @@ def route(
         pcb_build.write_project(spec, output_dir)
     except Exception:
         pass
+    metrics = route_metrics.collect_board_metrics(require_pcbnew().LoadBoard(str(board_path)))
+    metrics_path = output_dir / "route-metrics.json"
+    metrics_path.write_text(json.dumps(metrics, indent=2) + "\n", encoding="utf-8")
     return {
         "attempts": results,
         "selected_attempt": best_path.parent.name,
         "unconnected": best_score[0],
         "tracks": best_score[1],
         "board": str(board_path),
+        "metrics": metrics,
+        "metrics_report": str(metrics_path),
     }
 
 

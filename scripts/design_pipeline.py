@@ -313,6 +313,22 @@ def report_markdown(report: dict[str, Any], extra: dict[str, Any]) -> str:
                 f"- Report: `{drc.get('report', '')}`",
             ]
         )
+    if extra.get("routing", {}).get("metrics"):
+        metrics = extra["routing"]["metrics"]
+        lines.extend([
+            "",
+            "## Routing quality metrics",
+            "",
+            f"- Track copper length: {metrics.get('track_length_mm')} mm",
+            f"- Track segments: {metrics.get('track_segment_count')}",
+            f"- Vias: {metrics.get('via_count')}",
+            f"- Via layer-transition locations: {metrics.get('via_layer_transition_count')}",
+            f"- Unconnected items: {metrics.get('unconnected_items')}",
+            f"- Clearance violations: {metrics.get('clearance_violations', 'not measured')}",
+            f"- Metrics JSON: `{extra['routing'].get('metrics_report', '')}`",
+            "",
+            "These are routing measurements, not electrical, thermal, SI/PI, EMC, or safety sign-off.",
+        ])
     if extra.get("impedance"):
         lines.extend(["", "## Impedance", "", "| Netclass | Layer | Kind | Width (mm) | Z0 (ohm) | Target (ohm) | Pass |", "|---|---|---|---:|---:|---:|---|"])
         for item in extra["impedance"]:
@@ -509,6 +525,14 @@ def cmd_all(args: argparse.Namespace) -> int:
         stages["netlist_parity"] = 0 if check["netlist_parity"]["ok"] else max(1, len(check["netlist_parity"].get("errors", [])))
         stages["length_match"] = 0 if check["length_match"]["ok"] else max(1, len(check["length_match"].get("errors", [])))
         extra["length_match"] = check["length_match"]
+        if extra.get("routing", {}).get("metrics"):
+            metrics = extra["routing"]["metrics"]
+            metrics["clearance_violations"] = check["drc"].get("clearance_violations")
+            metrics["drc_violations"] = check["drc"].get("violations")
+            metrics["drc_ok"] = check["drc"].get("ok")
+            metrics_path = extra["routing"].get("metrics_report")
+            if metrics_path:
+                ds.write_json(Path(metrics_path), metrics)
 
     stages["stackup"] = stackup_gate(spec, profile)
     impedance_failures, impedance_results = impedance_gate(spec)

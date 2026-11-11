@@ -24,7 +24,8 @@ An Agent Skill for **professional automatic PCB design** with KiCad 9. It turns 
 | `examples/visual-ask-led.json` | Example visual payload covering footprints, choice, confirm, multi-select and text |
 | `scripts/design_spec.py` | Dependency-free spec validator, netlist importer, impedance/current calculations, gate report |
 | `scripts/pcb_build.py` | Spec → KiCad board with real library footprints (pcbnew) |
-| `scripts/pcb_route.py` | DSN export → Freerouting → SES import → zone fill |
+| `scripts/pcb_route.py` | DSN export → Freerouting → SES import → zone fill → routing metrics |
+| `scripts/route_metrics.py` | Track-length, via, layer, connectivity and DRC-backed clearance metrics |
 | `scripts/pcb_check.py` | Structural, DRC, DFM, netlist-parity and length-match gates |
 | `scripts/pcb_fab.py` | Gerbers, drill, position, STEP, IPC-D-356 and fabrication README |
 | `scripts/design_pipeline.py` | Orchestrates build/route/check/fab and writes the release report; `--backend auto` selects local or CI |
@@ -91,6 +92,7 @@ Outputs land in `build/led-blinky/`:
 led-blinky.kicad_pcb        generated board
 led-blinky.kicad_pro        design rules and netclasses
 route-attempt-N/            DSN, SES and Freerouting logs
+route-metrics.json         routed copper/connectivity/DRC metrics
 check/check.json            structural, DRC, DFM, parity, length-match results
 fab/                        Gerbers, drill, position, STEP, IPC-D-356, zip, fab.json
 report/design-report.json   machine-readable gate report
