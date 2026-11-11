@@ -40,6 +40,12 @@ def require_pcbnew():
 def export_dsn(board_path: Path, dsn_path: Path) -> None:
     pcbnew = require_pcbnew()
     board = pcbnew.LoadBoard(str(board_path))
+    # Route with GND as a normal net. A poured plane exported to Specctra makes
+    # Freerouting skip that net, which can leave isolated copper islands. The
+    # pours are re-added and filled after the SES import, and the GND vias the
+    # router places also stitch the top and bottom pours together.
+    for index in range(board.GetAreaCount() - 1, -1, -1):
+        board.Remove(board.GetArea(index))
     ok = pcbnew.ExportSpecctraDSN(board, str(dsn_path))
     if ok is False or not dsn_path.is_file():
         raise RuntimeError(f"pcbnew.ExportSpecctraDSN failed for {board_path}")
