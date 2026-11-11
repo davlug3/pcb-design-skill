@@ -90,5 +90,38 @@ class PadAwarePlacementTests(unittest.TestCase):
             optimize_placement(entries, spec)
 
 
+    def test_power_loop_scores_supply_and_return_legs(self):
+        entries = [
+            ({"ref": "U1", "at": {"x_mm": 20, "y_mm": 20}, "pads": {"1": "VCC", "2": "GND"},
+              "_placement_pad_numbers": {"1": (4.0, 0.0), "2": (4.0, 2.0)}}, 2, 2),
+            ({"ref": "C1", "pads": {"1": "VCC", "2": "GND"},
+              "_placement_pad_numbers": {"1": (-1.0, 0.0), "2": (-1.0, 2.0)}}, 2, 2),
+        ]
+        spec = {"board": {"width_mm": 60, "height_mm": 40}, "placement": {
+            "mode": "auto", "margin_mm": 2, "grid_mm": 1, "clearance_mm": 0,
+            "fixed_refs": ["U1"], "power_loops": [{
+                "supply": [{"ref": "U1", "pad": "1"}, {"ref": "C1", "pad": "1"}],
+                "return": [{"ref": "C1", "pad": "2"}, {"ref": "U1", "pad": "2"}],
+                "weight": 10, "reason": "local bypass supply and ground return",
+            }],
+        }}
+        result = optimize_placement(entries, spec)
+        self.assertEqual(result["C1"][:2], (25.0, 20.0))
+
+    def test_power_loop_rejects_unknown_return_pad(self):
+        entries = [
+            ({"ref": "U1", "_placement_pad_numbers": {"1": (0, 0), "2": (0, 1)}}, 2, 2),
+            ({"ref": "C1", "_placement_pad_numbers": {"1": (0, 0), "2": (0, 1)}}, 2, 2),
+        ]
+        spec = {"board": {"width_mm": 40, "height_mm": 30}, "placement": {
+            "mode": "auto", "power_loops": [{
+                "supply": [{"ref": "U1", "pad": "1"}, {"ref": "C1", "pad": "1"}],
+                "return": [{"ref": "C1", "pad": "9"}, {"ref": "U1", "pad": "2"}],
+            }],
+        }}
+        with self.assertRaisesRegex(ValueError, "unknown pad"):
+            optimize_placement(entries, spec)
+
+
 if __name__ == "__main__":
     unittest.main()
