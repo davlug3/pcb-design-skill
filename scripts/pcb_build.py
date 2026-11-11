@@ -399,19 +399,26 @@ def _footprint_bbox(fp) -> tuple[float, float, float, float]:
     treat an asymmetric part as if it were symmetric and either reject valid
     edge positions or accept off-board ones.
 
-    Prefer the F.CrtYd courtyard, which is the real mechanical keepout. The
-    full bounding box also contains reference/value text and can be much
-    larger than the part, causing false collisions. Fall back to the full box
-    when a footprint has no courtyard.
+    Use the mechanical bounding box without reference/value text, which can be
+    much larger than the part and cause false collisions. KiCad exposes this as
+    ``GetBoundingBox(include_text, include_invisible_text)``. Prefer the F.CrtYd
+    courtyard when that call is unavailable; fall back to the full box last.
     """
     box = None
     try:
-        import pcbnew
-        courtyard = fp.GetCourtyard(pcbnew.F_CrtYd)
-        if courtyard is not None and not courtyard.IsEmpty():
-            box = courtyard.BBox()
+        box = fp.GetBoundingBox(False, False)
+    except TypeError:
+        box = None
     except Exception:
         box = None
+    if box is None:
+        try:
+            import pcbnew
+            courtyard = fp.GetCourtyard(pcbnew.F_CrtYd)
+            if courtyard is not None and not courtyard.IsEmpty():
+                box = courtyard.BBox()
+        except Exception:
+            box = None
     if box is None:
         box = _get(fp, ["GetBoundingBox", "GetFootprintRect"])
     if box is None:
