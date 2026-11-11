@@ -34,6 +34,7 @@ class SpecValidationTests(unittest.TestCase):
             "ref": "U1",
             "value": "IC",
             "footprint": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+            "at": {"x_mm": 10, "y_mm": 10},
             "pads": {"1": "+5V", "2": "GND"},
         })
         spec["placement"]["power_loops"] = [{
