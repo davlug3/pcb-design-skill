@@ -246,6 +246,31 @@
             }
           }
         },
+        "pad_paths": {
+          "type": "array",
+          "description": "Ordered physical-pad path objectives for datasheet-derived switching hot loops, crystal networks, or RF matching chains. Adjacent pads are kept near one another; closed paths also connect the last pad to the first.",
+          "items": {
+            "type": "object",
+            "required": ["kind", "pads"],
+            "additionalProperties": false,
+            "properties": {
+              "kind": {"enum": ["switching_hot_loop", "crystal_network", "rf_matching", "other"]},
+              "pads": {
+                "type": "array",
+                "minItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["ref", "pad"],
+                  "additionalProperties": false,
+                  "properties": {"ref": {"type": "string"}, "pad": {"type": "string"}}
+                }
+              },
+              "closed": {"type": "boolean", "default": false, "description": "Whether to also minimize the final-to-first pad segment; use for a loop only when that physical connection is part of the intended topology."},
+              "weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0},
+              "reason": {"type": "string"}
+            }
+          }
+        },
         "keepouts": {
           "type": "array",
           "items": {
