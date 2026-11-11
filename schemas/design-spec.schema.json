@@ -211,6 +211,25 @@
             }
           }
         },
+        "power_loops": {
+          "type": "array",
+          "description": "Two-leg geometric objective for a local bypass loop: IC supply pad to capacitor supply pad, plus capacitor ground pad to IC ground pad.",
+          "items": {
+            "type": "object",
+            "required": ["supply", "return"],
+            "additionalProperties": false,
+            "properties": {
+              "supply": {"type": "array", "minItems": 2, "maxItems": 2,
+                "items": {"type": "object", "required": ["ref", "pad"], "additionalProperties": false,
+                  "properties": {"ref": {"type": "string"}, "pad": {"type": "string"}}}},
+              "return": {"type": "array", "minItems": 2, "maxItems": 2,
+                "items": {"type": "object", "required": ["ref", "pad"], "additionalProperties": false,
+                  "properties": {"ref": {"type": "string"}, "pad": {"type": "string"}}}},
+              "weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0},
+              "reason": {"type": "string"}
+            }
+          }
+        },
         "keepouts": {
           "type": "array",
           "items": {
