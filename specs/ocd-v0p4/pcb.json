@@ -548,6 +548,12 @@
         "2": "X2_W",
         "3": "X2_W"
       },
+      "at": {
+        "x_mm": 20.0,
+        "y_mm": 10.0,
+        "rotation_deg": 0.0,
+        "side": "front"
+      },
       "properties": {
         "note": "pin1=CCW, pin2=wiper, pin3=CW tied to wiper; CW increases gain"
       }
@@ -562,6 +568,12 @@
         "2": "TONE_W",
         "3": "TONE_W"
       },
+      "at": {
+        "x_mm": 40.0,
+        "y_mm": 10.0,
+        "rotation_deg": 0.0,
+        "side": "front"
+      },
       "properties": {
         "note": "pin1=CCW, pin2=wiper, pin3=CW tied to wiper; CW increases resistance"
       }
@@ -575,6 +587,12 @@
         "1": "GND",
         "2": "OUT",
         "3": "VOL_TOP"
+      },
+      "at": {
+        "x_mm": 60.0,
+        "y_mm": 10.0,
+        "rotation_deg": 0.0,
+        "side": "front"
       },
       "properties": {
         "note": "pin1=CCW/GND, pin2=wiper/OUT, pin3=CW/VOL_TOP"
@@ -735,7 +753,10 @@
       "H2",
       "H3",
       "H4",
-      "U1"
+      "U1",
+      "X2",
+      "X4",
+      "X5"
     ]
   },
   "routing": {
