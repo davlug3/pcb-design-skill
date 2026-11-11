@@ -184,6 +184,33 @@
             }
           }
         },
+        "pad_proximity": {
+          "type": "array",
+          "description": "Soft objectives minimizing Manhattan distance between two explicitly identified footprint pads. Use for datasheet-identified pin relationships such as an IC supply pad and its local bypass capacitor pad. Does not model routed loops or return paths.",
+          "items": {
+            "type": "object",
+            "required": ["pads"],
+            "additionalProperties": false,
+            "properties": {
+              "pads": {
+                "type": "array",
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "type": "object",
+                  "required": ["ref", "pad"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "ref": {"type": "string"},
+                    "pad": {"type": "string"}
+                  }
+                }
+              },
+              "weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0},
+              "reason": {"type": "string"}
+            }
+          }
+        },
         "keepouts": {
           "type": "array",
           "items": {

@@ -35,6 +35,7 @@ Move to 4 layers when you need a solid reference plane, dense routing, or contro
 
 ## Placement
 
+- The placer supports optional `placement.pad_proximity` pairs that minimize distance between two named physical pads (component reference + pad number). Use only when the exact pin relationship is known from the selected device datasheet/reference layout—for example, a named IC supply pad and the corresponding local bypass capacitor pad. This is a soft Manhattan-distance objective, not a routed-loop, inductance, return-path, or layer-aware calculation; verify the complete capacitor–pin–ground loop manually.
 - Place connectors, mounting holes, power entry/regulation and the MCU first; these define the mechanical envelope.
 - Group by function and separate noisy (switching supplies, digital, radio) from sensitive (analog, sensors, crystals) domains.
 - Keep switching converters and their hot loops compact; keep crystals/oscillators close to their IC with a local ground and no traces underneath.
