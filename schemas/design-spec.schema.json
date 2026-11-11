@@ -4,22 +4,11 @@
   "title": "PCB Design Spec v1",
   "description": "Canonical, tool-independent description of a PCB design. The design pipeline turns this into a KiCad 9 board, routes it, runs professional gates, and exports fabrication data.",
   "type": "object",
-  "required": [
-    "version",
-    "name",
-    "profile",
-    "board",
-    "rules",
-    "components"
-  ],
+  "required": ["version", "name", "profile", "board", "rules", "components"],
   "additionalProperties": false,
   "properties": {
-    "$schema": {
-      "type": "string"
-    },
-    "version": {
-      "const": 1
-    },
+    "$schema": {"type": "string"},
+    "version": {"const": 1},
     "name": {
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$",
@@ -29,127 +18,49 @@
       "type": "string",
       "description": "Board-class profile in profiles/<name>.json. Selects rules, gates, and required sign-offs."
     },
-    "title": {
-      "type": "string"
-    },
-    "revision": {
-      "type": "string"
-    },
+    "title": {"type": "string"},
+    "revision": {"type": "string"},
     "board": {
       "type": "object",
-      "required": [
-        "width_mm",
-        "height_mm",
-        "layers"
-      ],
+      "required": ["width_mm", "height_mm", "layers"],
       "additionalProperties": false,
       "properties": {
-        "width_mm": {
-          "type": "number",
-          "exclusiveMinimum": 0
-        },
-        "height_mm": {
-          "type": "number",
-          "exclusiveMinimum": 0
-        },
-        "layers": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 32
-        },
-        "thickness_mm": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 1.6
-        },
-        "copper_oz": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 1
-        },
-        "material": {
-          "type": "string",
-          "default": "FR4"
-        },
+        "width_mm": {"type": "number", "exclusiveMinimum": 0},
+        "height_mm": {"type": "number", "exclusiveMinimum": 0},
+        "layers": {"type": "integer", "minimum": 1, "maximum": 32},
+        "thickness_mm": {"type": "number", "exclusiveMinimum": 0, "default": 1.6},
+        "copper_oz": {"type": "number", "exclusiveMinimum": 0, "default": 1},
+        "material": {"type": "string", "default": "FR4"},
         "surface_finish": {
           "type": "string",
-          "enum": [
-            "HASL",
-            "HASL-LF",
-            "ENIG",
-            "ENEPIG",
-            "OSP",
-            "Immersion Silver",
-            "Immersion Tin",
-            "Hard Gold",
-            "None"
-          ],
+          "enum": ["HASL", "HASL-LF", "ENIG", "ENEPIG", "OSP", "Immersion Silver", "Immersion Tin", "Hard Gold", "None"],
           "default": "HASL-LF"
         },
-        "mask_color": {
-          "type": "string",
-          "default": "green"
-        },
-        "silkscreen_color": {
-          "type": "string",
-          "default": "white"
-        },
-        "edge_radius_mm": {
-          "type": "number",
-          "minimum": 0,
-          "default": 0
-        },
+        "mask_color": {"type": "string", "default": "green"},
+        "silkscreen_color": {"type": "string", "default": "white"},
+        "edge_radius_mm": {"type": "number", "minimum": 0, "default": 0},
         "stackup": {
           "type": "object",
           "description": "Required for impedance-controlled profiles. Copper and dielectric layers in physical order.",
-          "required": [
-            "layers"
-          ],
+          "required": ["layers"],
           "additionalProperties": false,
           "properties": {
-            "source": {
-              "type": "string",
-              "description": "Vendor stackup datasheet/reference."
-            },
-            "confirmed": {
-              "type": "boolean",
-              "default": false
-            },
+            "source": {"type": "string", "description": "Vendor stackup datasheet/reference."},
+            "confirmed": {"type": "boolean", "default": false},
             "layers": {
               "type": "array",
               "minItems": 3,
               "items": {
                 "type": "object",
-                "required": [
-                  "type",
-                  "thickness_mm"
-                ],
+                "required": ["type", "thickness_mm"],
                 "additionalProperties": false,
                 "properties": {
-                  "type": {
-                    "enum": [
-                      "copper",
-                      "dielectric"
-                    ]
-                  },
-                  "name": {
-                    "type": "string"
-                  },
-                  "thickness_mm": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  },
-                  "material": {
-                    "type": "string"
-                  },
-                  "er": {
-                    "type": "number",
-                    "exclusiveMinimum": 0
-                  },
-                  "loss_tangent": {
-                    "type": "number",
-                    "minimum": 0
-                  }
+                  "type": {"enum": ["copper", "dielectric"]},
+                  "name": {"type": "string"},
+                  "thickness_mm": {"type": "number", "exclusiveMinimum": 0},
+                  "material": {"type": "string"},
+                  "er": {"type": "number", "exclusiveMinimum": 0},
+                  "loss_tangent": {"type": "number", "minimum": 0}
                 }
               }
             }
@@ -161,56 +72,16 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "min_track_width_mm": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 0.2
-        },
-        "min_clearance_mm": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 0.2
-        },
-        "min_via_diameter_mm": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 0.6
-        },
-        "min_via_drill_mm": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 0.3
-        },
-        "min_hole_diameter_mm": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 0.3
-        },
-        "min_annular_ring_mm": {
-          "type": "number",
-          "minimum": 0,
-          "default": 0.15
-        },
-        "edge_clearance_mm": {
-          "type": "number",
-          "minimum": 0,
-          "default": 0.5
-        },
-        "min_silk_width_mm": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 0.15
-        },
-        "min_mask_sliver_mm": {
-          "type": "number",
-          "minimum": 0,
-          "default": 0.1
-        },
-        "min_hole_to_hole_mm": {
-          "type": "number",
-          "minimum": 0,
-          "default": 0.5
-        }
+        "min_track_width_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.2},
+        "min_clearance_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.2},
+        "min_via_diameter_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.6},
+        "min_via_drill_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.3},
+        "min_hole_diameter_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.3},
+        "min_annular_ring_mm": {"type": "number", "minimum": 0, "default": 0.15},
+        "edge_clearance_mm": {"type": "number", "minimum": 0, "default": 0.5},
+        "min_silk_width_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.15},
+        "min_mask_sliver_mm": {"type": "number", "minimum": 0, "default": 0.1},
+        "min_hole_to_hole_mm": {"type": "number", "minimum": 0, "default": 0.5}
       }
     },
     "netclasses": {
@@ -219,47 +90,16 @@
         "type": "object",
         "additionalProperties": false,
         "properties": {
-          "track_width_mm": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "clearance_mm": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "via_diameter_mm": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "via_drill_mm": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "layer": {
-            "type": "string",
-            "description": "Copper layer the impedance target applies to, e.g. F.Cu or In1.Cu."
-          },
-          "impedance_ohm": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "impedance_tolerance_pct": {
-            "type": "number",
-            "exclusiveMinimum": 0,
-            "default": 10
-          },
-          "diff_pair": {
-            "type": "boolean",
-            "default": false
-          },
-          "diff_pair_gap_mm": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "length_match_mm": {
-            "type": "number",
-            "minimum": 0
-          }
+          "track_width_mm": {"type": "number", "exclusiveMinimum": 0},
+          "clearance_mm": {"type": "number", "exclusiveMinimum": 0},
+          "via_diameter_mm": {"type": "number", "exclusiveMinimum": 0},
+          "via_drill_mm": {"type": "number", "exclusiveMinimum": 0},
+          "layer": {"type": "string", "description": "Copper layer the impedance target applies to, e.g. F.Cu or In1.Cu."},
+          "impedance_ohm": {"type": "number", "exclusiveMinimum": 0},
+          "impedance_tolerance_pct": {"type": "number", "exclusiveMinimum": 0, "default": 10},
+          "diff_pair": {"type": "boolean", "default": false},
+          "diff_pair_gap_mm": {"type": "number", "exclusiveMinimum": 0},
+          "length_match_mm": {"type": "number", "minimum": 0}
         }
       }
     },
@@ -267,37 +107,16 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "name"
-        ],
+        "required": ["name"],
         "additionalProperties": false,
         "properties": {
-          "name": {
-            "type": "string",
-            "minLength": 1
-          },
-          "class": {
-            "type": "string"
-          },
-          "voltage_v": {
-            "type": "number",
-            "minimum": 0
-          },
-          "current_a": {
-            "type": "number",
-            "minimum": 0
-          },
-          "impedance_ohm": {
-            "type": "number",
-            "exclusiveMinimum": 0
-          },
-          "diff_pair": {
-            "type": "string",
-            "description": "Companion net name for a differential pair."
-          },
-          "notes": {
-            "type": "string"
-          }
+          "name": {"type": "string", "minLength": 1},
+          "class": {"type": "string"},
+          "voltage_v": {"type": "number", "minimum": 0},
+          "current_a": {"type": "number", "minimum": 0},
+          "impedance_ohm": {"type": "number", "exclusiveMinimum": 0},
+          "diff_pair": {"type": "string", "description": "Companion net name for a differential pair."},
+          "notes": {"type": "string"}
         }
       }
     },
@@ -306,20 +125,11 @@
       "minItems": 1,
       "items": {
         "type": "object",
-        "required": [
-          "ref",
-          "footprint"
-        ],
+        "required": ["ref", "footprint"],
         "additionalProperties": false,
         "properties": {
-          "ref": {
-            "type": "string",
-            "minLength": 1
-          },
-          "value": {
-            "type": "string",
-            "default": ""
-          },
+          "ref": {"type": "string", "minLength": 1},
+          "value": {"type": "string", "default": ""},
           "footprint": {
             "type": "string",
             "description": "KiCad library id 'Library:Footprint' or a path to a .kicad_mod file."
@@ -328,42 +138,19 @@
             "type": "object",
             "additionalProperties": false,
             "properties": {
-              "x_mm": {
-                "type": "number"
-              },
-              "y_mm": {
-                "type": "number"
-              },
-              "rotation_deg": {
-                "type": "number",
-                "default": 0
-              },
-              "side": {
-                "enum": [
-                  "front",
-                  "back"
-                ],
-                "default": "front"
-              }
+              "x_mm": {"type": "number"},
+              "y_mm": {"type": "number"},
+              "rotation_deg": {"type": "number", "default": 0},
+              "side": {"enum": ["front", "back"], "default": "front"}
             }
           },
           "pads": {
             "type": "object",
             "description": "Pad number -> net name. Required unless a netlist/schematic is supplied.",
-            "additionalProperties": {
-              "type": "string"
-            }
+            "additionalProperties": {"type": "string"}
           },
-          "dnp": {
-            "type": "boolean",
-            "default": false
-          },
-          "properties": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          }
+          "dnp": {"type": "boolean", "default": false},
+          "properties": {"type": "object", "additionalProperties": {"type": "string"}}
         }
       }
     },
@@ -371,44 +158,17 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "mode": {
-          "enum": [
-            "fixed",
-            "auto"
-          ],
-          "default": "fixed"
-        },
-        "margin_mm": {
-          "type": "number",
-          "minimum": 0,
-          "default": 2
-        },
-        "grid_mm": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 2.54
-        },
-        "clearance_mm": {
-          "type": "number",
-          "minimum": 0,
-          "default": 1
-        },
-        "fixed_refs": {
-          "type": "array",
-          "uniqueItems": true,
-          "items": {
-            "type": "string"
-          },
-          "description": "Component references with explicit at coordinates that automatic placement must preserve."
-        },
+        "mode": {"enum": ["fixed", "auto"], "default": "fixed"},
+        "margin_mm": {"type": "number", "minimum": 0, "default": 2.0},
+        "grid_mm": {"type": "number", "exclusiveMinimum": 0, "default": 2.54},
+        "clearance_mm": {"type": "number", "minimum": 0, "default": 1.0},
+        "fixed_refs": {"type": "array", "uniqueItems": true, "items": {"type": "string"}, "description": "Component references with explicit at coordinates that automatic placement must preserve."},
         "proximity": {
           "type": "array",
           "description": "Soft component-center proximity objectives for automatic placement. Electrical net affinity uses actual KiCad pad offsets when available; this does not model routed traces, return paths, thermal behavior, or datasheet-specific constraints.",
           "items": {
             "type": "object",
-            "required": [
-              "refs"
-            ],
+            "required": ["refs"],
             "additionalProperties": false,
             "properties": {
               "refs": {
@@ -416,21 +176,11 @@
                 "minItems": 2,
                 "maxItems": 2,
                 "uniqueItems": true,
-                "items": {
-                  "type": "string"
-                },
+                "items": {"type": "string"},
                 "description": "The two component references to keep near one another."
               },
-              "weight": {
-                "type": "number",
-                "exclusiveMinimum": 0,
-                "default": 1,
-                "description": "Relative Manhattan-distance penalty; larger values make this relationship more influential."
-              },
-              "reason": {
-                "type": "string",
-                "description": "Human-readable rationale, e.g. datasheet-recommended local bypass network."
-              }
+              "weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0, "description": "Relative Manhattan-distance penalty; larger values make this relationship more influential."},
+              "reason": {"type": "string", "description": "Human-readable rationale, e.g. datasheet-recommended local bypass network."}
             }
           }
         },
@@ -439,9 +189,7 @@
           "description": "Soft objectives minimizing Manhattan distance between two explicitly identified footprint pads. Use for datasheet-identified pin relationships such as an IC supply pad and its local bypass capacitor pad. Does not model routed loops or return paths.",
           "items": {
             "type": "object",
-            "required": [
-              "pads"
-            ],
+            "required": ["pads"],
             "additionalProperties": false,
             "properties": {
               "pads": {
@@ -450,34 +198,19 @@
                 "maxItems": 2,
                 "items": {
                   "type": "object",
-                  "required": [
-                    "ref",
-                    "pad"
-                  ],
+                  "required": ["ref", "pad"],
                   "additionalProperties": false,
                   "properties": {
-                    "ref": {
-                      "type": "string"
-                    },
-                    "pad": {
-                      "type": "string"
-                    }
+                    "ref": {"type": "string"},
+                    "pad": {"type": "string"}
                   }
                 }
               },
-              "weight": {
-                "type": "number",
-                "exclusiveMinimum": 0,
-                "default": 1
-              },
-              "reason": {
-                "type": "string"
-              },
-              "source": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Datasheet/reference-layout citation, preferably URL plus page, section, or figure."
-              }
+              "weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0},
+              "reason": {"type": "string"},
+              "source": {"type": "string", "minLength": 1, "description": "Datasheet/reference-layout citation, preferably URL plus page, section, or figure."},
+              "source": {"type": "string", "minLength": 1, "description": "Datasheet/reference-layout citation, preferably URL plus page, section, or figure."},
+              "source": {"type": "string", "minLength": 1, "description": "Datasheet/reference-layout citation, preferably URL plus page, section, or figure."}
             }
           }
         },
@@ -486,67 +219,17 @@
           "description": "Two-leg geometric objective for a local bypass loop: IC supply pad to capacitor supply pad, plus capacitor ground pad to IC ground pad.",
           "items": {
             "type": "object",
-            "required": [
-              "supply",
-              "return"
-            ],
+            "required": ["supply", "return"],
             "additionalProperties": false,
             "properties": {
-              "supply": {
-                "type": "array",
-                "minItems": 2,
-                "maxItems": 2,
-                "items": {
-                  "type": "object",
-                  "required": [
-                    "ref",
-                    "pad"
-                  ],
-                  "additionalProperties": false,
-                  "properties": {
-                    "ref": {
-                      "type": "string"
-                    },
-                    "pad": {
-                      "type": "string"
-                    }
-                  }
-                }
-              },
-              "return": {
-                "type": "array",
-                "minItems": 2,
-                "maxItems": 2,
-                "items": {
-                  "type": "object",
-                  "required": [
-                    "ref",
-                    "pad"
-                  ],
-                  "additionalProperties": false,
-                  "properties": {
-                    "ref": {
-                      "type": "string"
-                    },
-                    "pad": {
-                      "type": "string"
-                    }
-                  }
-                }
-              },
-              "weight": {
-                "type": "number",
-                "exclusiveMinimum": 0,
-                "default": 1
-              },
-              "reason": {
-                "type": "string"
-              },
-              "source": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Datasheet/reference-layout citation, preferably URL plus page, section, or figure."
-              }
+              "supply": {"type": "array", "minItems": 2, "maxItems": 2,
+                "items": {"type": "object", "required": ["ref", "pad"], "additionalProperties": false,
+                  "properties": {"ref": {"type": "string"}, "pad": {"type": "string"}}}},
+              "return": {"type": "array", "minItems": 2, "maxItems": 2,
+                "items": {"type": "object", "required": ["ref", "pad"], "additionalProperties": false,
+                  "properties": {"ref": {"type": "string"}, "pad": {"type": "string"}}}},
+              "weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0},
+              "reason": {"type": "string"}
             }
           }
         },
@@ -555,58 +238,23 @@
           "description": "Ordered physical-pad path objectives for datasheet-derived switching hot loops, crystal networks, or RF matching chains. Adjacent pads are kept near one another; closed paths also connect the last pad to the first.",
           "items": {
             "type": "object",
-            "required": [
-              "kind",
-              "pads"
-            ],
+            "required": ["kind", "pads"],
             "additionalProperties": false,
             "properties": {
-              "kind": {
-                "enum": [
-                  "switching_hot_loop",
-                  "crystal_network",
-                  "rf_matching",
-                  "other"
-                ]
-              },
+              "kind": {"enum": ["switching_hot_loop", "crystal_network", "rf_matching", "other"]},
               "pads": {
                 "type": "array",
                 "minItems": 2,
                 "items": {
                   "type": "object",
-                  "required": [
-                    "ref",
-                    "pad"
-                  ],
+                  "required": ["ref", "pad"],
                   "additionalProperties": false,
-                  "properties": {
-                    "ref": {
-                      "type": "string"
-                    },
-                    "pad": {
-                      "type": "string"
-                    }
-                  }
+                  "properties": {"ref": {"type": "string"}, "pad": {"type": "string"}}
                 }
               },
-              "closed": {
-                "type": "boolean",
-                "default": false,
-                "description": "Whether to also minimize the final-to-first pad segment; use for a loop only when that physical connection is part of the intended topology."
-              },
-              "weight": {
-                "type": "number",
-                "exclusiveMinimum": 0,
-                "default": 1
-              },
-              "reason": {
-                "type": "string"
-              },
-              "source": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Datasheet/reference-layout citation, preferably URL plus page, section, or figure."
-              }
+              "closed": {"type": "boolean", "default": false, "description": "Whether to also minimize the final-to-first pad segment; use for a loop only when that physical connection is part of the intended topology."},
+              "weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0},
+              "reason": {"type": "string"}
             }
           }
         },
@@ -614,31 +262,14 @@
           "type": "array",
           "items": {
             "type": "object",
-            "required": [
-              "x_mm",
-              "y_mm",
-              "width_mm",
-              "height_mm"
-            ],
+            "required": ["x_mm", "y_mm", "width_mm", "height_mm"],
             "additionalProperties": false,
             "properties": {
-              "x_mm": {
-                "type": "number"
-              },
-              "y_mm": {
-                "type": "number"
-              },
-              "width_mm": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "height_mm": {
-                "type": "number",
-                "exclusiveMinimum": 0
-              },
-              "reason": {
-                "type": "string"
-              }
+              "x_mm": {"type": "number"},
+              "y_mm": {"type": "number"},
+              "width_mm": {"type": "number", "exclusiveMinimum": 0},
+              "height_mm": {"type": "number", "exclusiveMinimum": 0},
+              "reason": {"type": "string"}
             }
           }
         }
@@ -648,85 +279,28 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "mode": {
-          "enum": [
-            "freerouting",
-            "none"
-          ],
-          "default": "freerouting"
-        },
-        "max_passes": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 100
-        },
-        "threads": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 4
-        },
-        "timeout_s": {
-          "type": "integer",
-          "minimum": 30,
-          "default": 900
-        },
-        "attempts": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 3
-        },
-        "optimize": {
-          "type": "boolean",
-          "default": true
-        },
-        "feedback_rounds": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 2,
-          "default": 0,
-          "description": "Optional routing-feedback placement iterations; 0 disables the feature."
-        },
-        "feedback_top_nets": {
-          "type": "integer",
-          "minimum": 1,
-          "maximum": 10,
-          "default": 3,
-          "description": "Number of longest measured nets used to derive soft placement objectives."
-        },
-        "feedback_weight": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "default": 1,
-          "description": "Base weight for routing-derived component proximity objectives."
-        }
+        "mode": {"enum": ["freerouting", "none"], "default": "freerouting"},
+        "max_passes": {"type": "integer", "minimum": 1, "default": 100},
+        "threads": {"type": "integer", "minimum": 1, "default": 4},
+        "timeout_s": {"type": "integer", "minimum": 30, "default": 900},
+        "attempts": {"type": "integer", "minimum": 1, "default": 3},
+        "optimize": {"type": "boolean", "default": true},
+        "feedback_rounds": {"type": "integer", "minimum": 0, "maximum": 2, "default": 0, "description": "Optional routing-feedback placement iterations; 0 disables the feature."},
+        "feedback_top_nets": {"type": "integer", "minimum": 1, "maximum": 10, "default": 3, "description": "Number of longest measured nets used to derive soft placement objectives."},
+        "feedback_weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0, "description": "Base weight for routing-derived component proximity objectives."}
       }
     },
     "zones": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "net",
-          "layer"
-        ],
+        "required": ["net", "layer"],
         "additionalProperties": false,
         "properties": {
-          "net": {
-            "type": "string"
-          },
-          "layer": {
-            "type": "string"
-          },
-          "clearance_mm": {
-            "type": "number",
-            "exclusiveMinimum": 0,
-            "default": 0.3
-          },
-          "min_thickness_mm": {
-            "type": "number",
-            "exclusiveMinimum": 0,
-            "default": 0.25
-          },
+          "net": {"type": "string"},
+          "layer": {"type": "string"},
+          "clearance_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.3},
+          "min_thickness_mm": {"type": "number", "exclusiveMinimum": 0, "default": 0.25},
           "keepout": {
             "type": "boolean",
             "default": false,
@@ -739,50 +313,20 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "vendor": {
-          "type": "string",
-          "default": "generic"
-        },
+        "vendor": {"type": "string", "default": "generic"},
         "capabilities": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "min_track_mm": {
-              "type": "number",
-              "exclusiveMinimum": 0
-            },
-            "min_clearance_mm": {
-              "type": "number",
-              "exclusiveMinimum": 0
-            },
-            "min_via_diameter_mm": {
-              "type": "number",
-              "exclusiveMinimum": 0
-            },
-            "min_via_drill_mm": {
-              "type": "number",
-              "exclusiveMinimum": 0
-            },
-            "min_annular_ring_mm": {
-              "type": "number",
-              "minimum": 0
-            },
-            "min_hole_to_hole_mm": {
-              "type": "number",
-              "minimum": 0
-            },
-            "max_width_mm": {
-              "type": "number",
-              "exclusiveMinimum": 0
-            },
-            "max_height_mm": {
-              "type": "number",
-              "exclusiveMinimum": 0
-            },
-            "max_layers": {
-              "type": "integer",
-              "minimum": 1
-            }
+            "min_track_mm": {"type": "number", "exclusiveMinimum": 0},
+            "min_clearance_mm": {"type": "number", "exclusiveMinimum": 0},
+            "min_via_diameter_mm": {"type": "number", "exclusiveMinimum": 0},
+            "min_via_drill_mm": {"type": "number", "exclusiveMinimum": 0},
+            "min_annular_ring_mm": {"type": "number", "minimum": 0},
+            "min_hole_to_hole_mm": {"type": "number", "minimum": 0},
+            "max_width_mm": {"type": "number", "exclusiveMinimum": 0},
+            "max_height_mm": {"type": "number", "exclusiveMinimum": 0},
+            "max_layers": {"type": "integer", "minimum": 1}
           }
         }
       }
@@ -793,27 +337,17 @@
       "properties": {
         "completed": {
           "type": "array",
-          "items": {
-            "type": "string"
-          },
+          "items": {"type": "string"},
           "description": "Profile human_signoff items that a qualified reviewer has completed."
         },
-        "reviewer": {
-          "type": "string"
-        },
-        "date": {
-          "type": "string"
-        },
-        "notes": {
-          "type": "string"
-        }
+        "reviewer": {"type": "string"},
+        "date": {"type": "string"},
+        "notes": {"type": "string"}
       }
     },
     "assumptions": {
       "type": "array",
-      "items": {
-        "type": "string"
-      }
+      "items": {"type": "string"}
     },
     "netlist_source": {
       "type": "string",
@@ -824,27 +358,10 @@
       "description": "Provenance and warnings from a schematic, netlist, or LTspice import.",
       "additionalProperties": false,
       "properties": {
-        "format": {
-          "enum": [
-            "kicad-netlist",
-            "ltspice"
-          ]
-        },
-        "source": {
-          "type": "string"
-        },
-        "warnings": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "excluded": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
+        "format": {"enum": ["kicad-netlist", "ltspice"]},
+        "source": {"type": "string"},
+        "warnings": {"type": "array", "items": {"type": "string"}},
+        "excluded": {"type": "array", "items": {"type": "string"}}
       }
     }
   }
