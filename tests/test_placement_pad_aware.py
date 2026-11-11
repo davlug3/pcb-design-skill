@@ -169,6 +169,38 @@ class PadAwarePlacementTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown pad"):
             optimize_placement(entries, spec)
 
+    def test_bbox_offset_is_used_for_fixed_components(self):
+        # A 10 mm-wide part whose bbox centre is +8 mm from its origin spans
+        # [x+3, x+13]. On a 40 mm board with a 1 mm margin, x=2 is valid
+        # (5..15) but x=30 is not (33..43). A centred model would get both
+        # cases backwards near the left edge.
+        good = [({"ref": "J1", "at": {"x_mm": 2.0, "y_mm": 10.0},
+                  "_placement_offset": (8.0, 0.0)}, 10.0, 10.0)]
+        spec = {
+            "board": {"width_mm": 40, "height_mm": 20},
+            "placement": {"mode": "auto", "margin_mm": 1.0, "grid_mm": 1.0,
+                          "clearance_mm": 0.5, "fixed_refs": ["J1"]},
+        }
+        self.assertEqual(optimize_placement(good, spec)["J1"], (2.0, 10.0, 0.0))
+
+        bad = [({"ref": "J1", "at": {"x_mm": 30.0, "y_mm": 10.0},
+                 "_placement_offset": (8.0, 0.0)}, 10.0, 10.0)]
+        with self.assertRaisesRegex(ValueError, "violates board bounds"):
+            optimize_placement(bad, spec)
+
+    def test_bbox_offset_extends_auto_placement_range_to_the_edge(self):
+        entries = [({"ref": "J1", "_placement_offset": (8.0, 0.0)}, 10.0, 10.0)]
+        spec = {
+            "board": {"width_mm": 40, "height_mm": 20},
+            "placement": {"mode": "auto", "margin_mm": 1.0, "grid_mm": 1.0,
+                          "clearance_mm": 0.5},
+        }
+        x, y, _ = optimize_placement(entries, spec)["J1"]
+        self.assertGreaterEqual(x + 8.0 - 5.0, 1.0 - 1e-9)
+        self.assertLessEqual(x + 8.0 + 5.0, 39.0 + 1e-9)
+        self.assertGreaterEqual(y - 5.0, 1.0 - 1e-9)
+        self.assertLessEqual(y + 5.0, 19.0 + 1e-9)
+
 
 if __name__ == "__main__":
     unittest.main()

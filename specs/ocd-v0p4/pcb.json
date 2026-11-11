@@ -609,8 +609,8 @@
         "R": "BAT_NEG"
       },
       "at": {
-        "x_mm": 19.0,
-        "y_mm": 29.0,
+        "x_mm": 9.45,
+        "y_mm": 25.0,
         "rotation_deg": 0.0,
         "side": "front"
       },
@@ -628,8 +628,8 @@
         "S": "GND"
       },
       "at": {
-        "x_mm": 89.0,
-        "y_mm": 35.0,
+        "x_mm": 98.55,
+        "y_mm": 33.0,
         "rotation_deg": 180.0,
         "side": "front"
       }
