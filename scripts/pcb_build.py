@@ -477,6 +477,69 @@ def auto_place(footprints: list[tuple[dict[str, Any], Any]], spec: dict[str, Any
     return placement_engine.optimize_placement(entries, spec)
 
 
+def place_reference_text(board, spec: dict[str, Any]) -> None:
+    """Keep visible reference text inside the board and apart from each other.
+
+    Placement uses the mechanical footprint box and deliberately ignores text,
+    so a part at the edge can have its reference clipped or overlapping a
+    neighbour. This pass only moves visible reference fields; it never moves a
+    component.
+    """
+    pcbnew = require_pcbnew()
+    width = float(spec["board"]["width_mm"])
+    height = float(spec["board"]["height_mm"])
+    rules = spec.get("rules", {})
+    margin = float(rules.get("silk_margin_mm", 0.3))
+    gap = float(rules.get("silk_text_gap_mm", 0.25))
+
+    entries = []
+    for fp in board.GetFootprints():
+        ref = fp.Reference()
+        if ref is None or not ref.IsVisible():
+            continue
+        entries.append(ref)
+
+    def box_of(ref):
+        box = ref.GetBoundingBox()
+        return [box.GetLeft() / 1e6, box.GetTop() / 1e6,
+                box.GetRight() / 1e6, box.GetBottom() / 1e6]
+
+    def move(ref, dx, dy):
+        position = ref.GetPosition()
+        ref.SetPosition(vec(position.x / 1e6 + dx, position.y / 1e6 + dy))
+
+    def clamp():
+        for ref in entries:
+            x1, y1, x2, y2 = box_of(ref)
+            dx = dy = 0.0
+            if x1 < margin:
+                dx = margin - x1
+            elif x2 > width - margin:
+                dx = (width - margin) - x2
+            if y1 < margin:
+                dy = margin - y1
+            elif y2 > height - margin:
+                dy = (height - margin) - y2
+            if dx or dy:
+                move(ref, dx, dy)
+
+    clamp()
+    for _ in range(8):
+        moved = False
+        for i, first in enumerate(entries):
+            ax1, ay1, ax2, ay2 = box_of(first)
+            for second in entries[i + 1:]:
+                bx1, by1, bx2, by2 = box_of(second)
+                if (ax2 + gap <= bx1 or bx2 + gap <= ax1
+                        or ay2 + gap <= by1 or by2 + gap <= ay1):
+                    continue
+                move(second, 0.0, ay2 + gap - by1)
+                moved = True
+        if not moved:
+            break
+    clamp()
+
+
 def build(spec: dict[str, Any], output_dir: Path, footprints_dir: Path | None = None) -> Path:
     pcbnew = require_pcbnew()
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -576,6 +639,8 @@ def build(spec: dict[str, Any], output_dir: Path, footprints_dir: Path | None = 
                 raise RuntimeError(f"{comp['ref']} pad {pad_number} references undeclared net {net_name!r}")
             pad.SetNet(nets[net_name])
 
+    place_reference_text(board, spec)
+
     # Copper pour(s). The outline is inset so the pour does not touch Edge.Cuts.
     for zone_spec in spec.get("zones", []):
         if zone_spec.get("keepout"):
@@ -595,6 +660,9 @@ def build(spec: dict[str, Any], output_dir: Path, footprints_dir: Path | None = 
         zone.SetNet(nets[net_name])
         _call(zone, ["SetLocalClearance"], mm(float(zone_spec.get("clearance_mm", 0.3))))
         _call(zone, ["SetMinThickness"], mm(float(zone_spec.get("min_thickness_mm", 0.25))))
+        island_mode = getattr(pcbnew, "ISLAND_REMOVAL_MODE_ALWAYS", None)
+        if island_mode is not None:
+            _call(zone, ["SetIslandRemovalMode"], island_mode)
         connection = str(zone_spec.get("pad_connection", "thermal")).lower()
         connection_const = {
             "solid": getattr(pcbnew, "ZONE_CONNECTION_FULL", None),
