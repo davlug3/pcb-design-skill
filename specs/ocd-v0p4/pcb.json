@@ -1,0 +1,777 @@
+{
+  "version": 1,
+  "name": "ocd_v0p4_8v18v",
+  "profile": "2layer-low-speed",
+  "title": "OCD v0.4 THT 1590B",
+  "revision": "v0.4",
+  "board": {
+    "width_mm": 108.0,
+    "height_mm": 58.0,
+    "layers": 2,
+    "thickness_mm": 1.6,
+    "copper_oz": 1.0,
+    "material": "FR4",
+    "surface_finish": "HASL-LF",
+    "mask_color": "green",
+    "silkscreen_color": "white",
+    "edge_radius_mm": 0.0
+  },
+  "rules": {
+    "min_track_width_mm": 0.2,
+    "min_clearance_mm": 0.2,
+    "min_via_diameter_mm": 0.6,
+    "min_via_drill_mm": 0.3,
+    "min_hole_diameter_mm": 0.3,
+    "min_annular_ring_mm": 0.15,
+    "edge_clearance_mm": 0.5,
+    "min_silk_width_mm": 0.15,
+    "min_mask_sliver_mm": 0.1,
+    "min_hole_to_hole_mm": 0.5
+  },
+  "netclasses": {
+    "Default": {
+      "track_width_mm": 0.25,
+      "clearance_mm": 0.2,
+      "via_diameter_mm": 0.6,
+      "via_drill_mm": 0.3
+    },
+    "Power": {
+      "track_width_mm": 0.5,
+      "clearance_mm": 0.3,
+      "via_diameter_mm": 0.8,
+      "via_drill_mm": 0.4
+    }
+  },
+  "nets": [
+    {
+      "name": "GND",
+      "class": "Power",
+      "voltage_v": 0.0
+    },
+    {
+      "name": "VCC_JACK",
+      "class": "Power",
+      "voltage_v": 9.0
+    },
+    {
+      "name": "VCC",
+      "class": "Power",
+      "voltage_v": 9.0
+    },
+    {
+      "name": "VCC_F",
+      "class": "Power",
+      "voltage_v": 9.0
+    },
+    {
+      "name": "VREF",
+      "class": "Default"
+    },
+    {
+      "name": "IN",
+      "class": "Default"
+    },
+    {
+      "name": "IN_B",
+      "class": "Default"
+    },
+    {
+      "name": "X1_P",
+      "class": "Default"
+    },
+    {
+      "name": "X1_FB",
+      "class": "Default"
+    },
+    {
+      "name": "X1_RG",
+      "class": "Default"
+    },
+    {
+      "name": "X2_W",
+      "class": "Default"
+    },
+    {
+      "name": "X1_OUT",
+      "class": "Default"
+    },
+    {
+      "name": "CLIP_A",
+      "class": "Default"
+    },
+    {
+      "name": "CLIP_B",
+      "class": "Default"
+    },
+    {
+      "name": "M2_D1_NODE",
+      "class": "Default"
+    },
+    {
+      "name": "X3_FB",
+      "class": "Default"
+    },
+    {
+      "name": "X3_RG",
+      "class": "Default"
+    },
+    {
+      "name": "X3_OUT",
+      "class": "Default"
+    },
+    {
+      "name": "TONE_TOP",
+      "class": "Default"
+    },
+    {
+      "name": "TONE_W",
+      "class": "Default"
+    },
+    {
+      "name": "VOL_TOP",
+      "class": "Default"
+    },
+    {
+      "name": "SW1_1",
+      "class": "Default"
+    },
+    {
+      "name": "LED_A",
+      "class": "Default"
+    },
+    {
+      "name": "OUT",
+      "class": "Default"
+    },
+    {
+      "name": "J_IN_TIP",
+      "class": "Default"
+    },
+    {
+      "name": "BAT_NEG",
+      "class": "Default"
+    },
+    {
+      "name": "J_OUT_TIP",
+      "class": "Default"
+    },
+    {
+      "name": "BAT_POS",
+      "class": "Default"
+    }
+  ],
+  "components": [
+    {
+      "ref": "D_PWR",
+      "value": "APPROX_1N5819",
+      "footprint": "Diode_THT:D_DO-41_SOD81_P10.16mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "D_PWR",
+        "spice_type": "D",
+        "logical_pins": "{\"1\":\"VCC_JACK\",\"2\":\"VCC\"}"
+      }
+    },
+    {
+      "ref": "R1",
+      "value": "100",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R1",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"VCC\",\"2\":\"VCC_F\"}"
+      }
+    },
+    {
+      "ref": "C2",
+      "value": "10u",
+      "footprint": "Capacitor_THT:CP_Radial_D5.0mm_P2.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C2",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"VCC_F\",\"2\":\"GND\"}"
+      }
+    },
+    {
+      "ref": "C3",
+      "value": "100n",
+      "footprint": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C3",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"VCC_F\",\"2\":\"GND\"}"
+      }
+    },
+    {
+      "ref": "R4",
+      "value": "10k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R4",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"VCC_F\",\"2\":\"VREF\"}"
+      }
+    },
+    {
+      "ref": "R7",
+      "value": "10k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R7",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"VREF\",\"2\":\"GND\"}"
+      }
+    },
+    {
+      "ref": "C5",
+      "value": "10u",
+      "footprint": "Capacitor_THT:CP_Radial_D5.0mm_P2.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C5",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"VREF\",\"2\":\"GND\"}"
+      }
+    },
+    {
+      "ref": "C1",
+      "value": "22n",
+      "footprint": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C1",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"IN\",\"2\":\"IN_B\"}"
+      }
+    },
+    {
+      "ref": "R2",
+      "value": "1Meg",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R2",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"IN_B\",\"2\":\"GND\"}"
+      }
+    },
+    {
+      "ref": "R6",
+      "value": "470k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R6",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"IN_B\",\"2\":\"VREF\"}"
+      }
+    },
+    {
+      "ref": "R3",
+      "value": "10k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R3",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"IN_B\",\"2\":\"X1_P\"}"
+      }
+    },
+    {
+      "ref": "R5",
+      "value": "2.2k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R5",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"X1_FB\",\"2\":\"X1_RG\"}"
+      }
+    },
+    {
+      "ref": "R8",
+      "value": "18k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R8",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"X1_FB\",\"2\":\"X2_W\"}"
+      }
+    },
+    {
+      "ref": "C4",
+      "value": "100n",
+      "footprint": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C4",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"X1_RG\",\"2\":\"VREF\"}"
+      }
+    },
+    {
+      "ref": "C6",
+      "value": "220p",
+      "footprint": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C6",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"X1_OUT\",\"2\":\"X1_FB\"}"
+      }
+    },
+    {
+      "ref": "R9",
+      "value": "10k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R9",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"X1_OUT\",\"2\":\"CLIP_A\"}"
+      }
+    },
+    {
+      "ref": "C7",
+      "value": "10n",
+      "footprint": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C7",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"VREF\",\"2\":\"CLIP_A\"}"
+      }
+    },
+    {
+      "ref": "R10",
+      "value": "10k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R10",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"CLIP_A\",\"2\":\"CLIP_B\"}"
+      }
+    },
+    {
+      "ref": "R12",
+      "value": "220k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R12",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"VREF\",\"2\":\"CLIP_B\"}"
+      }
+    },
+    {
+      "ref": "M1",
+      "value": "APPROX_2N7000",
+      "footprint": "Package_TO_SOT_THT:TO-92_Inline",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "M1",
+        "spice_type": "NMOS",
+        "logical_pins": "{\"1\":\"VREF\",\"2\":\"VREF\",\"3\":\"CLIP_A\"}"
+      }
+    },
+    {
+      "ref": "M2",
+      "value": "APPROX_2N7000",
+      "footprint": "Package_TO_SOT_THT:TO-92_Inline",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "M2",
+        "spice_type": "NMOS",
+        "logical_pins": "{\"1\":\"VREF\",\"2\":\"M2_D1_NODE\",\"3\":\"M2_D1_NODE\"}"
+      }
+    },
+    {
+      "ref": "D1",
+      "value": "APPROX_1N34A",
+      "footprint": "Diode_THT:D_DO-35_SOD27_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "D1",
+        "spice_type": "D",
+        "logical_pins": "{\"1\":\"CLIP_A\",\"2\":\"M2_D1_NODE\"}"
+      }
+    },
+    {
+      "ref": "R11",
+      "value": "39k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R11",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"X3_FB\",\"2\":\"X3_RG\"}"
+      }
+    },
+    {
+      "ref": "R13",
+      "value": "150k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R13",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"X3_FB\",\"2\":\"X3_OUT\"}"
+      }
+    },
+    {
+      "ref": "C8",
+      "value": "100n",
+      "footprint": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C8",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"X3_RG\",\"2\":\"VREF\"}"
+      }
+    },
+    {
+      "ref": "C9",
+      "value": "220p",
+      "footprint": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C9",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"X3_OUT\",\"2\":\"X3_FB\"}"
+      }
+    },
+    {
+      "ref": "C10",
+      "value": "10u",
+      "footprint": "Capacitor_THT:CP_Radial_D5.0mm_P2.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C10",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"X3_OUT\",\"2\":\"TONE_TOP\"}"
+      }
+    },
+    {
+      "ref": "C11",
+      "value": "47n",
+      "footprint": "Capacitor_THT:C_Disc_D5.0mm_W2.5mm_P5.00mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "C11",
+        "spice_type": "C",
+        "logical_pins": "{\"1\":\"TONE_W\",\"2\":\"GND\"}"
+      }
+    },
+    {
+      "ref": "R14",
+      "value": "22k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R14",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"TONE_TOP\",\"2\":\"VOL_TOP\"}"
+      }
+    },
+    {
+      "ref": "R15",
+      "value": "33k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R15",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"TONE_TOP\",\"2\":\"SW1_1\"}"
+      }
+    },
+    {
+      "ref": "R_LED",
+      "value": "4.7k",
+      "footprint": "Resistor_THT:R_Axial_DIN0207_L6.3mm_D2.5mm_P7.62mm_Horizontal",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "R_LED",
+        "spice_type": "R",
+        "logical_pins": "{\"1\":\"VCC_F\",\"2\":\"LED_A\"}"
+      }
+    },
+    {
+      "ref": "D_LED",
+      "value": "1.8V",
+      "footprint": "LED_THT:LED_D5.0mm",
+      "dnp": false,
+      "properties": {
+        "circuit_ref": "D_LED",
+        "spice_type": "LED",
+        "logical_pins": "{\"1\":\"LED_A\",\"2\":\"GND\"}"
+      }
+    },
+    {
+      "ref": "U1",
+      "value": "TL082 dual op-amp (merged X1A+X3A)",
+      "footprint": "Package_DIP:DIP-8_W7.62mm",
+      "dnp": false,
+      "pads": {
+        "1": "X1_OUT",
+        "2": "X1_FB",
+        "3": "X1_P",
+        "4": "GND",
+        "5": "CLIP_B",
+        "6": "X3_FB",
+        "7": "X3_OUT",
+        "8": "VCC_F"
+      },
+      "properties": {
+        "note": "one DIP-8 replaces the two SPICE sections X1A and X3A"
+      }
+    },
+    {
+      "ref": "X2",
+      "value": "1M Drive pot (rheostat)",
+      "footprint": "Potentiometer_THT:Potentiometer_Alpha_RD901F-40-00D_Single_Vertical",
+      "dnp": false,
+      "pads": {
+        "1": "X1_OUT",
+        "2": "X2_W",
+        "3": "X2_W"
+      },
+      "properties": {
+        "note": "pin1=CCW, pin2=wiper, pin3=CW tied to wiper; CW increases gain"
+      }
+    },
+    {
+      "ref": "X4",
+      "value": "10k Tone pot (rheostat)",
+      "footprint": "Potentiometer_THT:Potentiometer_Alpha_RD901F-40-00D_Single_Vertical",
+      "dnp": false,
+      "pads": {
+        "1": "TONE_TOP",
+        "2": "TONE_W",
+        "3": "TONE_W"
+      },
+      "properties": {
+        "note": "pin1=CCW, pin2=wiper, pin3=CW tied to wiper; CW increases resistance"
+      }
+    },
+    {
+      "ref": "X5",
+      "value": "100k Volume pot",
+      "footprint": "Potentiometer_THT:Potentiometer_Alpha_RD901F-40-00D_Single_Vertical",
+      "dnp": false,
+      "pads": {
+        "1": "GND",
+        "2": "OUT",
+        "3": "VOL_TOP"
+      },
+      "properties": {
+        "note": "pin1=CCW/GND, pin2=wiper/OUT, pin3=CW/VOL_TOP"
+      }
+    },
+    {
+      "ref": "J_IN",
+      "value": "1/4in TRS input jack (ring = battery disconnect)",
+      "footprint": "Connector_Audio:Jack_6.35mm_Neutrik_NMJ6HFD2_Horizontal",
+      "dnp": false,
+      "pads": {
+        "T": "J_IN_TIP",
+        "S": "GND",
+        "R": "BAT_NEG"
+      },
+      "properties": {
+        "note": "mono plug shorts R to S, completing the battery negative"
+      }
+    },
+    {
+      "ref": "J_OUT",
+      "value": "1/4in TS output jack",
+      "footprint": "Connector_Audio:Jack_6.35mm_Neutrik_NMJ4HFD2_Horizontal",
+      "dnp": false,
+      "pads": {
+        "T": "J_OUT_TIP",
+        "S": "GND"
+      }
+    },
+    {
+      "ref": "J_PWR",
+      "value": "9V DC jack, center-negative, switched",
+      "footprint": "Connector_BarrelJack:BarrelJack_CUI_PJ-102AH_Horizontal",
+      "dnp": false,
+      "pads": {
+        "1": "GND",
+        "2": "VCC_JACK",
+        "3": "BAT_POS"
+      },
+      "properties": {
+        "note": "PJ-102AH: pad1=center, pad2=sleeve, pad3=switch (2-3 closed with no plug)"
+      }
+    },
+    {
+      "ref": "BT1",
+      "value": "9V battery snap header",
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
+      "dnp": false,
+      "pads": {
+        "1": "BAT_POS",
+        "2": "BAT_NEG"
+      }
+    },
+    {
+      "ref": "SW_FS",
+      "value": "3PDT true-bypass interface (2x05 header)",
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical",
+      "dnp": false,
+      "pads": {
+        "1": "J_IN_TIP",
+        "2": "IN",
+        "3": "J_OUT_TIP",
+        "4": "J_OUT_TIP",
+        "5": "OUT",
+        "6": "GND",
+        "8": "LED_A",
+        "9": "GND"
+      },
+      "properties": {
+        "note": "header pin n wires 1:1 to 3PDT pin n; pin 7 open = LED on when engaged"
+      }
+    },
+    {
+      "ref": "SW_HP",
+      "value": "HP/LP toggle interface (1x03 header)",
+      "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
+      "dnp": false,
+      "pads": {
+        "1": "SW1_1",
+        "2": "VOL_TOP"
+      },
+      "properties": {
+        "note": "toggle shorts 1-2 for HP; open for LP"
+      }
+    },
+    {
+      "ref": "H1",
+      "value": "M3 mounting hole",
+      "footprint": "MountingHole:MountingHole_3.2mm_M3",
+      "dnp": false,
+      "pads": {},
+      "at": {
+        "x_mm": 4.5,
+        "y_mm": 4.5,
+        "rotation_deg": 0.0,
+        "side": "front"
+      },
+      "properties": {
+        "note": "non-plated M3 mounting hole"
+      }
+    },
+    {
+      "ref": "H2",
+      "value": "M3 mounting hole",
+      "footprint": "MountingHole:MountingHole_3.2mm_M3",
+      "dnp": false,
+      "pads": {},
+      "at": {
+        "x_mm": 103.5,
+        "y_mm": 4.5,
+        "rotation_deg": 0.0,
+        "side": "front"
+      },
+      "properties": {
+        "note": "non-plated M3 mounting hole"
+      }
+    },
+    {
+      "ref": "H3",
+      "value": "M3 mounting hole",
+      "footprint": "MountingHole:MountingHole_3.2mm_M3",
+      "dnp": false,
+      "pads": {},
+      "at": {
+        "x_mm": 4.5,
+        "y_mm": 53.5,
+        "rotation_deg": 0.0,
+        "side": "front"
+      },
+      "properties": {
+        "note": "non-plated M3 mounting hole"
+      }
+    },
+    {
+      "ref": "H4",
+      "value": "M3 mounting hole",
+      "footprint": "MountingHole:MountingHole_3.2mm_M3",
+      "dnp": false,
+      "pads": {},
+      "at": {
+        "x_mm": 103.5,
+        "y_mm": 53.5,
+        "rotation_deg": 0.0,
+        "side": "front"
+      },
+      "properties": {
+        "note": "non-plated M3 mounting hole"
+      }
+    }
+  ],
+  "placement": {
+    "mode": "auto",
+    "margin_mm": 3.0,
+    "grid_mm": 2.54,
+    "clearance_mm": 1.0,
+    "fixed_refs": [
+      "H1",
+      "H2",
+      "H3",
+      "H4"
+    ]
+  },
+  "routing": {
+    "mode": "freerouting",
+    "max_passes": 100,
+    "threads": 4,
+    "timeout_s": 1800,
+    "attempts": 3,
+    "optimize": true
+  },
+  "assumptions": [
+    "X1A and X3A are two sections of one TL082 dual op-amp; they are merged into a single DIP-8 U1 on the board.",
+    "The Drive, Tone and Volume pots replace the fixed simulation resistors R_X2POT, R_X4 and R_VOL5A/B; the SPICE netlist remains the electrical source of truth.",
+    "The 3PDT and HP/LP toggle are panel-mounted and wired to headers; a PCB-mounted 3PDT footprint needs a verified switch datasheet.",
+    "The input jack is a TRS part used as mono: the ring carries the battery negative and completes it only when a mono plug is inserted.",
+    "The DC jack is center-negative; its normally-closed switch (pads 2-3) disconnects the battery when a DC plug is inserted.",
+    "Mechanical placement relative to the 1590B enclosure drilling is a follow-up; this board is electrically routed but not yet panel-fitted.",
+    "The PCB overlay is generated from the circuit spec; the SPICE netlist is the electrical source of truth.",
+    "Logical SPICE pin numbers are not physical footprint pads; pin maps must come from the real package datasheet.",
+    "The pcb-design-skill DRC, DFM and unconnected gates, not this handoff, decide whether the board is manufacturable.",
+    "Ideal switches and simulation sources are excluded from the board."
+  ],
+  "netlist_source": "ocd_v0p4_8v18v.cir",
+  "zones": [
+    {
+      "net": "GND",
+      "layer": "B.Cu",
+      "clearance_mm": 0.3,
+      "min_thickness_mm": 0.25
+    }
+  ],
+  "fabrication": {
+    "vendor": "generic",
+    "capabilities": {
+      "min_track_mm": 0.15,
+      "min_clearance_mm": 0.15,
+      "min_via_diameter_mm": 0.45,
+      "min_via_drill_mm": 0.2,
+      "min_annular_ring_mm": 0.125,
+      "min_hole_to_hole_mm": 0.5,
+      "max_width_mm": 300,
+      "max_height_mm": 300,
+      "max_layers": 8
+    }
+  }
+}
