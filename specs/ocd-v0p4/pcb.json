@@ -758,8 +758,8 @@
   "placement": {
     "mode": "auto",
     "margin_mm": 1.5,
-    "grid_mm": 2.54,
-    "clearance_mm": 1.0,
+    "grid_mm": 1.27,
+    "clearance_mm": 0.8,
     "fixed_refs": [
       "H1",
       "H2",
