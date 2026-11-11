@@ -656,7 +656,7 @@
     },
     {
       "ref": "H1",
-      "value": "M3 mounting hole",
+      "value": "M3",
       "footprint": "MountingHole:MountingHole_3.2mm_M3",
       "dnp": false,
       "pads": {},
@@ -672,7 +672,7 @@
     },
     {
       "ref": "H2",
-      "value": "M3 mounting hole",
+      "value": "M3",
       "footprint": "MountingHole:MountingHole_3.2mm_M3",
       "dnp": false,
       "pads": {},
@@ -688,7 +688,7 @@
     },
     {
       "ref": "H3",
-      "value": "M3 mounting hole",
+      "value": "M3",
       "footprint": "MountingHole:MountingHole_3.2mm_M3",
       "dnp": false,
       "pads": {},
@@ -704,7 +704,7 @@
     },
     {
       "ref": "H4",
-      "value": "M3 mounting hole",
+      "value": "M3",
       "footprint": "MountingHole:MountingHole_3.2mm_M3",
       "dnp": false,
       "pads": {},
@@ -721,7 +721,7 @@
   ],
   "placement": {
     "mode": "auto",
-    "margin_mm": 3.0,
+    "margin_mm": 1.5,
     "grid_mm": 2.54,
     "clearance_mm": 1.0,
     "fixed_refs": [
