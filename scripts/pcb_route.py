@@ -200,6 +200,7 @@ def route(
     *,
     freerouting_jar: Path,
     attempts: int | None = None,
+    allow_feedback: bool = False,
 ) -> dict[str, Any]:
     routing = spec.get("routing", {})
     if routing.get("mode", "freerouting") == "none":
@@ -273,7 +274,7 @@ def route(
     selected_attempt = best_path.parent.name
     feedback_report: dict[str, Any] = {"enabled": False, "rounds": []}
     feedback_rounds = int(routing.get("feedback_rounds", 0))
-    if feedback_rounds and spec.get("placement", {}).get("mode") == "auto":
+    if allow_feedback and feedback_rounds and spec.get("placement", {}).get("mode") == "auto":
         feedback_report["enabled"] = True
         top_nets = int(routing.get("feedback_top_nets", 3))
         feedback_weight = float(routing.get("feedback_weight", 1.0))
@@ -298,7 +299,8 @@ def route(
                 candidate_board = pcb_build.build(feedback_spec, candidate_dir)
                 candidate_result = route(
                     feedback_spec, candidate_board, candidate_dir,
-                    freerouting_jar=freerouting_jar, attempts=attempts
+                    freerouting_jar=freerouting_jar, attempts=attempts,
+                    allow_feedback=False,
                 )
             except Exception as exc:
                 feedback_report["rounds"].append({
