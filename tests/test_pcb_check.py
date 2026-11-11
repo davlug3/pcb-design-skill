@@ -34,6 +34,16 @@ class FakePcbnew:
 
 
 class BoardDfmTests(unittest.TestCase):
+    def test_drc_parser_counts_clearance_markers(self) -> None:
+        report = """Found 3 DRC violations
+[clearance]: Clearance violation (clearance 0.20 mm; actual 0.00 mm)
+[clearance]: Clearance violation (clearance 0.20 mm; actual 0.10 mm)
+[track_width]: Track width violation
+"""
+        parsed = pcb_check._parse_drc_report(report)
+        self.assertEqual(parsed["violations"], 3)
+        self.assertEqual(parsed["clearance_violations"], 2)
+
     def test_uninspectable_track_fails_dfm_instead_of_being_ignored(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             board_path = Path(tmp) / "board.kicad_pcb"
