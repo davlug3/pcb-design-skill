@@ -89,6 +89,21 @@ def optimize_placement(
             raise ValueError("placement.power_loops legs must connect two distinct pads")
         if float(rule.get("weight", 1.0)) <= 0:
             raise ValueError("placement.power_loops weight must be greater than zero")
+    pad_paths = cfg.get("pad_paths", [])
+    for rule in pad_paths:
+        endpoints = rule.get("pads", [])
+        if len(endpoints) < 2:
+            raise ValueError("each placement.pad_paths rule requires at least two ordered pad endpoints")
+        if rule.get("closed", False) and len(endpoints) < 3:
+            raise ValueError("closed placement.pad_paths rules require at least three pad endpoints")
+        for endpoint in endpoints:
+            if not isinstance(endpoint, dict) or endpoint.get("ref") not in by_ref:
+                raise ValueError("placement.pad_paths references an unknown component")
+            ref, pad = endpoint["ref"], str(endpoint.get("pad", ""))
+            if not pad or pad not in pad_positions[ref]:
+                raise ValueError(f"placement.pad_paths references unknown pad {ref}:{pad}")
+        if float(rule.get("weight", 1.0)) <= 0:
+            raise ValueError("placement.pad_paths weight must be greater than zero")
     for rule in proximity:
         refs = rule.get("refs", [])
         if len(refs) != 2 or refs[0] == refs[1]:
@@ -201,6 +216,28 @@ def optimize_placement(
                 px, py = pad_positions[ref][str(own_endpoint["pad"])]
                 opx, opy = pad_positions[other_ref][str(other_endpoint["pad"])]
                 cost += weight * (abs((x + px) - (ox + opx)) + abs((y + py) - (oy + opy)))
+        # Ordered critical pad paths support datasheet-derived switching
+        # loops, crystal networks, and RF matching chains. Closed paths add
+        # the final-to-first segment. This is geometric distance only.
+        for rule in pad_paths:
+            endpoints = rule["pads"]
+            segments = list(zip(endpoints, endpoints[1:]))
+            if rule.get("closed", False):
+                segments.append((endpoints[-1], endpoints[0]))
+            for left, right in segments:
+                if left["ref"] == ref and right["ref"] in current:
+                    own_endpoint, other_endpoint = left, right
+                elif right["ref"] == ref and left["ref"] in current:
+                    own_endpoint, other_endpoint = right, left
+                else:
+                    continue
+                other_ref = other_endpoint["ref"]
+                ox, oy, _ = current[other_ref]
+                px, py = pad_positions[ref][str(own_endpoint["pad"])]
+                opx, opy = pad_positions[other_ref][str(other_endpoint["pad"])]
+                cost += float(rule.get("weight", 1.0)) * (
+                    abs((x + px) - (ox + opx)) + abs((y + py) - (oy + opy))
+                )
         # Explicit component-level proximity hints remain soft objectives.
         for rule in proximity:
             a, b = rule["refs"]
