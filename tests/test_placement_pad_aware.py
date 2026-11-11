@@ -134,5 +134,51 @@ class PadAwarePlacementTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "unknown pad"):
             optimize_placement(entries, spec)
 
+    def test_ordered_pad_path_keeps_adjacent_critical_pads_close(self):
+        entries = [
+            ({"ref": "U1", "at": {"x_mm": 10, "y_mm": 10},
+              "_placement_pad_numbers": {"1": (0, 0)}}, 2, 2),
+            ({"ref": "C1", "_placement_pad_numbers": {"1": (0, 0)}}, 2, 2),
+            ({"ref": "D1", "_placement_pad_numbers": {"1": (0, 0)}}, 2, 2),
+        ]
+        spec = {
+            "board": {"width_mm": 30, "height_mm": 20},
+            "placement": {
+                "mode": "auto", "margin_mm": 1, "grid_mm": 1,
+                "clearance_mm": 0, "fixed_refs": ["U1"],
+                "pad_paths": [{
+                    "kind": "switching_hot_loop",
+                    "pads": [
+                        {"ref": "U1", "pad": "1"},
+                        {"ref": "C1", "pad": "1"},
+                        {"ref": "D1", "pad": "1"},
+                    ],
+                    "weight": 10,
+                    "reason": "datasheet switching-current path",
+                }],
+            },
+        }
+        result = optimize_placement(entries, spec)
+        c1_d1_distance = (
+            abs(result["C1"][0] - result["D1"][0])
+            + abs(result["C1"][1] - result["D1"][1])
+        )
+        self.assertEqual(c1_d1_distance, 2.0)
+
+    def test_pad_path_rejects_unknown_pad(self):
+        entries = [
+            ({"ref": "U1", "_placement_pad_numbers": {"1": (0, 0)}}, 2, 2),
+            ({"ref": "C1", "_placement_pad_numbers": {"1": (0, 0)}}, 2, 2),
+        ]
+        spec = {
+            "board": {"width_mm": 30, "height_mm": 20},
+            "placement": {"mode": "auto", "pad_paths": [{
+                "kind": "crystal_network",
+                "pads": [{"ref": "U1", "pad": "1"}, {"ref": "C1", "pad": "7"}],
+            }]},
+        }
+        with self.assertRaisesRegex(ValueError, "unknown pad"):
+            optimize_placement(entries, spec)
+
 if __name__ == "__main__":
     unittest.main()
