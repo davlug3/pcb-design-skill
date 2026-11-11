@@ -54,15 +54,20 @@ def _parse_drc_report(text: str) -> dict[str, int]:
     errors = 0
     warnings = 0
     unconnected = 0
+    clearance_violations = 0
     m = re.search(r"Found\s+(\d+)\s+DRC violations", text)
     if m:
         errors = int(m.group(1))
     m = re.search(r"Found\s+(\d+)\s+unconnected\s+(?:items|pads)", text)
     if m:
         unconnected = int(m.group(1))
+    # KiCad emits a [clearance] marker for each clearance violation.
+    clearance_violations = len(re.findall(r"(?im)^\\s*\\[clearance\\]", text))
+    if clearance_violations == 0:
+        clearance_violations = len(re.findall(r"(?i)clearance violation", text))
     # The full report marks severity on each violation.
-    warnings = len(re.findall(r"\[[^\]]+\].*?\n\s*.*?warning", text, flags=re.IGNORECASE))
-    return {"violations": errors, "unconnected": unconnected, "warning_markers": warnings}
+    warnings = len(re.findall(r"\\[[^\\]]+\\].*?\\n\\s*.*?warning", text, flags=re.IGNORECASE))
+    return {"violations": errors, "unconnected": unconnected, "clearance_violations": clearance_violations, "warning_markers": warnings}
 
 
 def run_drc(board_path: Path, output_dir: Path, kicad_cli: str = "kicad-cli") -> dict[str, Any]:
