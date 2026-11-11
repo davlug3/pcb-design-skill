@@ -41,6 +41,13 @@ def optimize_placement(
     by_ref = {c["ref"]: (c, max(float(w), 0.1), max(float(h), 0.1)) for c, w, h in entries}
     if len(by_ref) != len(entries):
         raise ValueError("component references must be unique for automatic placement")
+    offsets = {
+        ref: (
+            float((comp.get("_placement_offset") or (0.0, 0.0))[0]),
+            float((comp.get("_placement_offset") or (0.0, 0.0))[1]),
+        )
+        for ref, (comp, _, _) in by_ref.items()
+    }
 
     positions: dict[str, tuple[float, float, float]] = {}
     rects: dict[str, tuple[float, float, float, float]] = {}
@@ -121,11 +128,14 @@ def optimize_placement(
 
     def rectangle(ref: str, x: float, y: float):
         _, w, h = by_ref[ref]
-        return (x - w / 2, y - h / 2, x + w / 2, y + h / 2)
+        cx, cy = offsets[ref]
+        return (x + cx - w / 2, y + cy - h / 2, x + cx + w / 2, y + cy + h / 2)
 
     def valid(ref: str, x: float, y: float, ignore: str | None = None) -> bool:
         _, w, h = by_ref[ref]
-        if x - w / 2 < margin or y - h / 2 < margin or x + w / 2 > width - margin or y + h / 2 > height - margin:
+        cx, cy = offsets[ref]
+        if (x + cx - w / 2 < margin or y + cy - h / 2 < margin
+                or x + cx + w / 2 > width - margin or y + cy + h / 2 > height - margin):
             return False
         rect = rectangle(ref, x, y)
         if any(_overlap(rect, k, 0.0) for k in keepouts):
@@ -147,8 +157,8 @@ def optimize_placement(
         positions[ref] = (x, y, rot)
         rects[ref] = rectangle(ref, x, y)
 
-    def candidate_axis(limit: float, size: float):
-        lo, hi = margin + size / 2, limit - margin - size / 2
+    def candidate_axis(limit: float, size: float, offset: float):
+        lo, hi = margin - offset + size / 2, limit - margin - offset - size / 2
         if lo > hi:
             return []
         count = int((hi - lo) // step)
@@ -159,7 +169,8 @@ def optimize_placement(
 
     def candidates(ref: str):
         _, w, h = by_ref[ref]
-        xs, ys = candidate_axis(width, w), candidate_axis(height, h)
+        cx, cy = offsets[ref]
+        xs, ys = candidate_axis(width, w, cx), candidate_axis(height, h, cy)
         return product(xs, ys)
 
     def score(ref: str, x: float, y: float, current: dict[str, tuple[float, float, float]]) -> float:
