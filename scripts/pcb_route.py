@@ -51,6 +51,34 @@ def export_dsn(board_path: Path, dsn_path: Path) -> None:
         raise RuntimeError(f"pcbnew.ExportSpecctraDSN failed for {board_path}")
 
 
+def inset_dsn_boundary(dsn_path: Path, inset_mm: float) -> None:
+    """Pull the Specctra routing boundary inside the board edge.
+
+    Freerouting only sees the board outline, not the KiCad edge-clearance rule,
+    so it can route copper flush to the edge and fail DRC. Insetting the
+    boundary makes the router keep its tracks clear of the edge. The clamp is
+    exact for the rectangular outlines this pipeline generates; the pours are
+    re-added from the spec after import, so they still reach the real edge.
+    """
+    text = dsn_path.read_text(encoding="utf-8")
+    match = re.search(r"\(boundary\s*\(path\s+pcb\s+\d+\s+([^)]+)\)\s*\)", text)
+    if not match:
+        return
+    values = [float(value) for value in match.group(1).split()]
+    xs = values[0::2]
+    ys = values[1::2]
+    if not xs or not ys:
+        return
+    inset = float(inset_mm) * 1000.0  # DSN coordinates are micrometres
+    x_min, x_max = min(xs) + inset, max(xs) - inset
+    y_min, y_max = min(ys) + inset, max(ys) - inset
+    points = []
+    for x, y in zip(xs, ys):
+        points.append(f"{min(max(x, x_min), x_max):g} {min(max(y, y_min), y_max):g}")
+    text = text[:match.start(1)] + "  ".join(points) + text[match.end(1):]
+    dsn_path.write_text(text, encoding="utf-8")
+
+
 def import_ses(board_path: Path, ses_path: Path) -> None:
     pcbnew = require_pcbnew()
     board = pcbnew.LoadBoard(str(board_path))
@@ -269,6 +297,9 @@ def route(
         ses = attempt_dir / f"{spec['name']}.ses"
         log = attempt_dir / f"freerouting-{attempt}.log"
         export_dsn(candidate, dsn)
+        inset_dsn_boundary(
+            dsn, float(spec.get("rules", {}).get("edge_clearance_mm", 0.5)) + 0.1
+        )
         info = run_freerouting(
             freerouting_jar,
             dsn,
