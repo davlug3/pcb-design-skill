@@ -152,7 +152,22 @@ def optimize_placement(
             raise ValueError(f"fixed component {ref} requires at.x_mm and at.y_mm")
         x, y = float(at["x_mm"]), float(at["y_mm"])
         if not valid(ref, x, y):
-            raise ValueError(f"fixed component {ref} violates board bounds, keepouts, or clearance")
+            _, w, h = by_ref[ref]
+            cx, cy = offsets[ref]
+            rect = rectangle(ref, x, y)
+            conflicts = [
+                (other, r) for other, r in rects.items()
+                if _overlap(rect, r, clearance)
+            ]
+            keep = [k for k in keepouts if _overlap(rect, k, 0.0)]
+            raise ValueError(
+                f"fixed component {ref} violates board bounds, keepouts, or clearance: "
+                f"origin=({x},{y}) size=({w:.3f},{h:.3f}) offset=({cx:.3f},{cy:.3f}) "
+                f"rect={tuple(round(v, 3) for v in rect)} "
+                f"bounds=({margin},{margin},{width - margin},{height - margin}) "
+                f"conflicts={[(o, tuple(round(v, 3) for v in r)) for o, r in conflicts]} "
+                f"keepouts={keep}"
+            )
         rot = float(at.get("rotation_deg", 0))
         positions[ref] = (x, y, rot)
         rects[ref] = rectangle(ref, x, y)
