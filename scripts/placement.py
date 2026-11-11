@@ -301,7 +301,16 @@ def optimize_placement(
             if best is None or key < best[0]:
                 best = (key, float(x), float(y))
         if best is None:
-            raise RuntimeError(f"auto-placement could not find room for {ref}")
+            _, w, h = by_ref[ref]
+            cx, cy = offsets[ref]
+            xs, ys = candidate_axis(width, w, cx), candidate_axis(height, h, cy)
+            free = sum(1 for x, y in product(xs, ys) if valid(ref, x, y))
+            raise RuntimeError(
+                f"auto-placement could not find room for {ref}: "
+                f"size=({w:.2f},{h:.2f}) offset=({cx:.2f},{cy:.2f}) "
+                f"grid=({len(xs)}x{len(ys)}) free={free} "
+                f"placed={[(r, tuple(round(v, 2) for v in rect)) for r, rect in sorted(rects.items())]}"
+            )
         _, x, y = best
         positions[ref] = (x, y, rotation)
         rects[ref] = rectangle(ref, x, y)

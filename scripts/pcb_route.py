@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -39,9 +40,43 @@ def require_pcbnew():
 def export_dsn(board_path: Path, dsn_path: Path) -> None:
     pcbnew = require_pcbnew()
     board = pcbnew.LoadBoard(str(board_path))
+    # Route with GND as a normal net. A poured plane exported to Specctra makes
+    # Freerouting skip that net, which can leave isolated copper islands. The
+    # pours are re-added and filled after the SES import, and the GND vias the
+    # router places also stitch the top and bottom pours together.
+    for index in range(board.GetAreaCount() - 1, -1, -1):
+        board.Remove(board.GetArea(index))
     ok = pcbnew.ExportSpecctraDSN(board, str(dsn_path))
     if ok is False or not dsn_path.is_file():
         raise RuntimeError(f"pcbnew.ExportSpecctraDSN failed for {board_path}")
+
+
+def inset_dsn_boundary(dsn_path: Path, inset_mm: float) -> None:
+    """Pull the Specctra routing boundary inside the board edge.
+
+    Freerouting only sees the board outline, not the KiCad edge-clearance rule,
+    so it can route copper flush to the edge and fail DRC. Insetting the
+    boundary makes the router keep its tracks clear of the edge. The clamp is
+    exact for the rectangular outlines this pipeline generates; the pours are
+    re-added from the spec after import, so they still reach the real edge.
+    """
+    text = dsn_path.read_text(encoding="utf-8")
+    match = re.search(r"\(boundary\s*\(path\s+pcb\s+\d+\s+([^)]+)\)\s*\)", text)
+    if not match:
+        return
+    values = [float(value) for value in match.group(1).split()]
+    xs = values[0::2]
+    ys = values[1::2]
+    if not xs or not ys:
+        return
+    inset = float(inset_mm) * 1000.0  # DSN coordinates are micrometres
+    x_min, x_max = min(xs) + inset, max(xs) - inset
+    y_min, y_max = min(ys) + inset, max(ys) - inset
+    points = []
+    for x, y in zip(xs, ys):
+        points.append(f"{min(max(x, x_min), x_max):g} {min(max(y, y_min), y_max):g}")
+    text = text[:match.start(1)] + "  ".join(points) + text[match.end(1):]
+    dsn_path.write_text(text, encoding="utf-8")
 
 
 def import_ses(board_path: Path, ses_path: Path) -> None:
@@ -87,6 +122,35 @@ def track_count(board_path: Path) -> int:
             return len(list(board.GetTracks()))
         except Exception:
             return 0
+
+
+def clamp_ses_widths(ses_path: Path, min_width_mm: float) -> int:
+    """Raise any routed track narrower than the board minimum to that minimum.
+
+    Freerouting can emit neckdowns below the netclass minimum (observed
+    0.1874 mm against a 0.2 mm board minimum), even while reporting a clean
+    run. The DRC gate rejects those, so clamp before import. The clamp widens
+    by the neckdown amount only; a genuine clearance conflict still fails the
+    DRC gate.
+    """
+    text = ses_path.read_text(encoding="utf-8")
+    match = re.search(r"\(resolution\s+um\s+(\d+)\)", text)
+    units_per_mm = int(match.group(1)) * 1000 if match else 10000
+    minimum = int(round(float(min_width_mm) * units_per_mm))
+    changed = 0
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal changed
+        width = int(match.group(2))
+        if width < minimum:
+            changed += 1
+            return f"{match.group(1)}{minimum}{match.group(3)}"
+        return match.group(0)
+
+    text = re.sub(r"(\(path\s+[^\s()]+\s+)(\d+)(\s)", replace, text)
+    if changed:
+        ses_path.write_text(text, encoding="utf-8")
+    return changed
 
 
 def fill_zones(board_path: Path) -> None:
@@ -233,6 +297,9 @@ def route(
         ses = attempt_dir / f"{spec['name']}.ses"
         log = attempt_dir / f"freerouting-{attempt}.log"
         export_dsn(candidate, dsn)
+        inset_dsn_boundary(
+            dsn, float(spec.get("rules", {}).get("edge_clearance_mm", 0.5)) + 0.1
+        )
         info = run_freerouting(
             freerouting_jar,
             dsn,
@@ -243,6 +310,8 @@ def route(
             optimize=optimize,
             log_path=log,
         )
+        min_width = float(spec.get("rules", {}).get("min_track_width_mm", 0.2))
+        info["width_clamps"] = clamp_ses_widths(ses, min_width)
         import_ses(candidate, ses)
         fill_zones(candidate)
         unconnected = unconnected_count(candidate)
