@@ -541,6 +541,12 @@ def build(spec: dict[str, Any], output_dir: Path, footprints_dir: Path | None = 
             raise RuntimeError(f"pcbnew could not load footprint {comp['footprint']}")
         fp.SetReference(comp["ref"])
         fp.SetValue(comp.get("value", ""))
+        if comp.get("board_only"):
+            pcbnew = require_pcbnew()
+            board_only_bit = int(getattr(pcbnew, "FP_BOARD_ONLY", 0) or 0)
+            if board_only_bit:
+                attributes = int(_get(fp, ["GetAttributes"], 0) or 0)
+                _call(fp, ["SetAttributes"], attributes | board_only_bit)
         if hasattr(fp, "SetDNP"):
             fp.SetDNP(bool(comp.get("dnp", False)))
         at = comp.get("at")
@@ -589,6 +595,13 @@ def build(spec: dict[str, Any], output_dir: Path, footprints_dir: Path | None = 
         zone.SetNet(nets[net_name])
         _call(zone, ["SetLocalClearance"], mm(float(zone_spec.get("clearance_mm", 0.3))))
         _call(zone, ["SetMinThickness"], mm(float(zone_spec.get("min_thickness_mm", 0.25))))
+        connection = str(zone_spec.get("pad_connection", "thermal")).lower()
+        connection_const = {
+            "solid": getattr(pcbnew, "ZONE_CONNECTION_FULL", None),
+            "none": getattr(pcbnew, "ZONE_CONNECTION_NONE", None),
+        }.get(connection, getattr(pcbnew, "ZONE_CONNECTION_THERMAL", None))
+        if connection_const is not None:
+            _call(zone, ["SetPadConnection"], connection_const)
         outline_poly = zone.Outline()
         outline_poly.NewOutline()
         inset = float(spec["rules"].get("edge_clearance_mm", 0.5))

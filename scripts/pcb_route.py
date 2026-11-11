@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -87,6 +88,35 @@ def track_count(board_path: Path) -> int:
             return len(list(board.GetTracks()))
         except Exception:
             return 0
+
+
+def clamp_ses_widths(ses_path: Path, min_width_mm: float) -> int:
+    """Raise any routed track narrower than the board minimum to that minimum.
+
+    Freerouting can emit neckdowns below the netclass minimum (observed
+    0.1874 mm against a 0.2 mm board minimum), even while reporting a clean
+    run. The DRC gate rejects those, so clamp before import. The clamp widens
+    by the neckdown amount only; a genuine clearance conflict still fails the
+    DRC gate.
+    """
+    text = ses_path.read_text(encoding="utf-8")
+    match = re.search(r"\(resolution\s+um\s+(\d+)\)", text)
+    units_per_mm = int(match.group(1)) * 1000 if match else 10000
+    minimum = int(round(float(min_width_mm) * units_per_mm))
+    changed = 0
+
+    def replace(match: re.Match[str]) -> str:
+        nonlocal changed
+        width = int(match.group(2))
+        if width < minimum:
+            changed += 1
+            return f"{match.group(1)}{minimum}{match.group(3)}"
+        return match.group(0)
+
+    text = re.sub(r"(\(path\s+[^\s()]+\s+)(\d+)(\s)", replace, text)
+    if changed:
+        ses_path.write_text(text, encoding="utf-8")
+    return changed
 
 
 def fill_zones(board_path: Path) -> None:
@@ -243,6 +273,8 @@ def route(
             optimize=optimize,
             log_path=log,
         )
+        min_width = float(spec.get("rules", {}).get("min_track_width_mm", 0.2))
+        info["width_clamps"] = clamp_ses_widths(ses, min_width)
         import_ses(candidate, ses)
         fill_zones(candidate)
         unconnected = unconnected_count(candidate)

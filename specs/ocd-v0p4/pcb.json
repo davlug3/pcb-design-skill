@@ -518,6 +518,7 @@
       "value": "TL082",
       "footprint": "Package_DIP:DIP-8_W7.62mm",
       "dnp": false,
+      "board_only": true,
       "pads": {
         "1": "X1_OUT",
         "2": "X1_FB",
@@ -543,6 +544,7 @@
       "value": "1M",
       "footprint": "Potentiometer_THT:Potentiometer_Alpha_RD901F-40-00D_Single_Vertical",
       "dnp": false,
+      "board_only": true,
       "pads": {
         "1": "X1_OUT",
         "2": "X2_W",
@@ -563,6 +565,7 @@
       "value": "10k",
       "footprint": "Potentiometer_THT:Potentiometer_Alpha_RD901F-40-00D_Single_Vertical",
       "dnp": false,
+      "board_only": true,
       "pads": {
         "1": "TONE_TOP",
         "2": "TONE_W",
@@ -583,6 +586,7 @@
       "value": "100k",
       "footprint": "Potentiometer_THT:Potentiometer_Alpha_RD901F-40-00D_Single_Vertical",
       "dnp": false,
+      "board_only": true,
       "pads": {
         "1": "GND",
         "2": "OUT",
@@ -603,6 +607,7 @@
       "value": "NMJ6HFD2",
       "footprint": "Connector_Audio:Jack_6.35mm_Neutrik_NMJ6HFD2_Horizontal",
       "dnp": false,
+      "board_only": true,
       "pads": {
         "T": "J_IN_TIP",
         "S": "GND",
@@ -623,6 +628,7 @@
       "value": "NMJ4HFD2",
       "footprint": "Connector_Audio:Jack_6.35mm_Neutrik_NMJ4HFD2_Horizontal",
       "dnp": false,
+      "board_only": true,
       "pads": {
         "T": "J_OUT_TIP",
         "S": "GND"
@@ -639,6 +645,7 @@
       "value": "PJ-102AH",
       "footprint": "Connector_BarrelJack:BarrelJack_CUI_PJ-102AH_Horizontal",
       "dnp": false,
+      "board_only": true,
       "pads": {
         "1": "GND",
         "2": "VCC_JACK",
@@ -653,6 +660,7 @@
       "value": "BATT",
       "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x02_P2.54mm_Vertical",
       "dnp": false,
+      "board_only": true,
       "pads": {
         "1": "BAT_POS",
         "2": "BAT_NEG"
@@ -663,6 +671,7 @@
       "value": "3PDT",
       "footprint": "Connector_PinHeader_2.54mm:PinHeader_2x05_P2.54mm_Vertical",
       "dnp": false,
+      "board_only": true,
       "pads": {
         "1": "J_IN_TIP",
         "2": "IN",
@@ -682,6 +691,7 @@
       "value": "HP/LP",
       "footprint": "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical",
       "dnp": false,
+      "board_only": true,
       "pads": {
         "1": "SW1_1",
         "2": "VOL_TOP"
@@ -695,6 +705,7 @@
       "value": "M3",
       "footprint": "MountingHole:MountingHole_3.2mm_M3",
       "dnp": false,
+      "board_only": true,
       "pads": {},
       "at": {
         "x_mm": 7.0,
@@ -711,6 +722,7 @@
       "value": "M3",
       "footprint": "MountingHole:MountingHole_3.2mm_M3",
       "dnp": false,
+      "board_only": true,
       "pads": {},
       "at": {
         "x_mm": 101.0,
@@ -727,6 +739,7 @@
       "value": "M3",
       "footprint": "MountingHole:MountingHole_3.2mm_M3",
       "dnp": false,
+      "board_only": true,
       "pads": {},
       "at": {
         "x_mm": 7.0,
@@ -743,6 +756,7 @@
       "value": "M3",
       "footprint": "MountingHole:MountingHole_3.2mm_M3",
       "dnp": false,
+      "board_only": true,
       "pads": {},
       "at": {
         "x_mm": 101.0,
@@ -799,7 +813,8 @@
       "net": "GND",
       "layer": "B.Cu",
       "clearance_mm": 0.3,
-      "min_thickness_mm": 0.25
+      "min_thickness_mm": 0.25,
+      "pad_connection": "solid"
     }
   ],
   "fabrication": {
