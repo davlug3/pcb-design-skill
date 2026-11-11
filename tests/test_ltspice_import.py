@@ -62,9 +62,14 @@ class LtspiceParseTests(unittest.TestCase):
             node_aliases={"N001": "+5V", "N002": "LED_A", "0": "GND"},
         )
         self.assertEqual(component(netlist, "R1")["pads"], {"1": "+5V", "2": "LED_A"})
-        self.assertEqual(component(netlist, "D1")["pads"], {"1": "LED_A", "2": "GND"})
+        # KiCad Device:D/LED pads are 1=K, 2=A; SPICE nodes are (anode, cathode).
+        self.assertEqual(component(netlist, "D1")["pads"], {"2": "LED_A", "1": "GND"})
         self.assertEqual(component(netlist, "D1")["value"], "RED")
         self.assertIn("+5V", [item["name"] for item in netlist["nets"]])
+
+    def test_diode_default_maps_anode_to_pad_two(self) -> None:
+        netlist = parse("D1 A_NET K_NET D\n.model D D(IS=1e-14)")
+        self.assertEqual(component(netlist, "D1")["pads"], {"2": "A_NET", "1": "K_NET"})
 
     def test_bjt_requires_a_pin_map(self) -> None:
         with self.assertRaises(ValueError) as ctx:

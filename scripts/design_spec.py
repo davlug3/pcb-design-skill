@@ -1053,6 +1053,10 @@ def _spice_apply_mapping(
         if prefix in ("R", "C", "L", "D"):
             if len(nodes) != 2:
                 raise ValueError(f"{ref}: expected 2 nodes for a {prefix} element, found {len(nodes)}")
+            if prefix == "D":
+                # KiCad Device:D/LED pads are 1=K, 2=A; SPICE nodes are
+                # (anode, cathode). Map anode -> pad 2, cathode -> pad 1.
+                return {"2": nodes[0], "1": nodes[1]}
             return {"1": nodes[0], "2": nodes[1]}
         pins = LTSPICE_SEMANTIC_PINS.get(prefix, ())
         hint = ", ".join(pins) if pins else "pads"
