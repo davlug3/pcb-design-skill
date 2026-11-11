@@ -410,3 +410,26 @@ python3 scripts/visual_ask.py ask examples/visual-ask-led.json \
   the pipeline's authority.
 - STEP files contain board geometry. Component 3D models are included only when
   the KiCad 3D library is installed in the build environment.
+
+ 
+## Optional routing-feedback placement optimization
+
+Set `routing.feedback_rounds` to `1` or `2` to enable an iterative
+placement experiment. After the baseline route, the pipeline ranks measured
+net copper lengths, creates soft `placement.proximity` hints between
+components on the longest eligible nets, rebuilds and reroutes a candidate,
+and compares it with the current best board. Candidates are accepted only
+when the lexicographic objective improves: fewer unconnected items, then
+shorter aggregate copper length on the selected critical nets, then fewer
+vias. The default is `0`, so existing builds are unchanged.
+
+`routing.feedback_top_nets` (default 3, range 1–10) controls how many nets
+feed the heuristic; `routing.feedback_weight` (default 1.0) controls the
+base soft-objective weight. Feedback only runs for automatically placed
+specifications. The full experiment is recorded in
+`route-feedback.json`; final route metrics remain in `route-metrics.json`.
+
+This is a geometry heuristic based on routed track lengths. It does not
+optimize actual current paths, impedance, return paths, loop inductance,
+thermal behavior, or EMC. It does not replace routing, DRC, DFM, or human
+review. A candidate that does not improve the measured objective is discarded.

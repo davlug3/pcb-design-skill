@@ -81,6 +81,21 @@ class SpecValidationTests(unittest.TestCase):
         self.assertTrue(any(item["code"] == "stackup.required" for item in findings.errors))
 
 
+    def test_routing_feedback_defaults_are_disabled(self) -> None:
+        spec = led_spec()
+        self.assertEqual(spec["routing"]["feedback_rounds"], 0)
+        self.assertEqual(spec["routing"]["feedback_top_nets"], 3)
+        self.assertEqual(spec["routing"]["feedback_weight"], 1.0)
+
+    def test_routing_feedback_controls_are_validated(self) -> None:
+        for key, value in (("feedback_rounds", 3), ("feedback_top_nets", 11), ("feedback_weight", 0)):
+            spec = led_spec()
+            spec["routing"][key] = value
+            findings = ds.validate_spec(spec, led_profile())
+            self.assertFalse(findings.ok, key)
+            self.assertTrue(any(item["code"] == "routing." + key for item in findings.errors), key)
+
+
 class ImpedanceTests(unittest.TestCase):
     def test_microstrip_impedance_is_physical(self) -> None:
         z0 = ds.microstrip_z0(0.2, 0.2, 0.035, 4.2, {})

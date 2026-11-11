@@ -504,7 +504,10 @@ def cmd_all(args: argparse.Namespace) -> int:
         else:
             print(f"[route] {board_path}")
             try:
-                route_result = pcb_route.route(spec, board_path, output_dir, freerouting_jar=jar)
+                route_result = pcb_route.route(
+                    spec, board_path, output_dir, freerouting_jar=jar,
+                    allow_feedback=not bool(args.board) and not args.skip_build,
+                )
                 extra["routing"] = route_result
                 stages["unconnected"] = route_result.get("unconnected", 0)
             except Exception as exc:

@@ -281,7 +281,10 @@
         "threads": {"type": "integer", "minimum": 1, "default": 4},
         "timeout_s": {"type": "integer", "minimum": 30, "default": 900},
         "attempts": {"type": "integer", "minimum": 1, "default": 3},
-        "optimize": {"type": "boolean", "default": true}
+        "optimize": {"type": "boolean", "default": true},
+        "feedback_rounds": {"type": "integer", "minimum": 0, "maximum": 2, "default": 0, "description": "Optional routing-feedback placement iterations; 0 disables the feature."},
+        "feedback_top_nets": {"type": "integer", "minimum": 1, "maximum": 10, "default": 3, "description": "Number of longest measured nets used to derive soft placement objectives."},
+        "feedback_weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0, "description": "Base weight for routing-derived component proximity objectives."}
       }
     },
     "zones": {
