@@ -398,8 +398,22 @@ def _footprint_bbox(fp) -> tuple[float, float, float, float]:
     connectors are common offenders. Placement must use the offset or it will
     treat an asymmetric part as if it were symmetric and either reject valid
     edge positions or accept off-board ones.
+
+    Prefer the F.CrtYd courtyard, which is the real mechanical keepout. The
+    full bounding box also contains reference/value text and can be much
+    larger than the part, causing false collisions. Fall back to the full box
+    when a footprint has no courtyard.
     """
-    box = _get(fp, ["GetBoundingBox", "GetFootprintRect"])
+    box = None
+    try:
+        import pcbnew
+        courtyard = fp.GetCourtyard(pcbnew.F_CrtYd)
+        if courtyard is not None and not courtyard.IsEmpty():
+            box = courtyard.BBox()
+    except Exception:
+        box = None
+    if box is None:
+        box = _get(fp, ["GetBoundingBox", "GetFootprintRect"])
     if box is None:
         return (5.0, 5.0, 0.0, 0.0)
     width = abs(float(_get(box, ["GetWidth"]) or 0)) / 1_000_000.0
