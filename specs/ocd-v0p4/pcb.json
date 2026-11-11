@@ -528,6 +528,12 @@
         "7": "X3_OUT",
         "8": "VCC_F"
       },
+      "at": {
+        "x_mm": 54.0,
+        "y_mm": 35.0,
+        "rotation_deg": 0.0,
+        "side": "front"
+      },
       "properties": {
         "note": "one DIP-8 replaces the two SPICE sections X1A and X3A"
       }
@@ -728,7 +734,8 @@
       "H1",
       "H2",
       "H3",
-      "H4"
+      "H4",
+      "U1"
     ]
   },
   "routing": {
