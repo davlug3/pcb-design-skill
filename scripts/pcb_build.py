@@ -492,10 +492,16 @@ def place_reference_text(board, spec: dict[str, Any]) -> None:
     margin = float(rules.get("silk_margin_mm", 0.3))
     gap = float(rules.get("silk_text_gap_mm", 0.25))
 
+    fixed_refs = set(spec.get("placement", {}).get("fixed_refs") or [])
     entries = []
     for fp in board.GetFootprints():
         ref = fp.Reference()
         if ref is None or not ref.IsVisible():
+            continue
+        # Auto-placed passives are packed too tightly for readable silk text.
+        # Keep their reference on the fab layer and in the position file.
+        if fixed_refs and fp.GetReference() not in fixed_refs:
+            ref.SetVisible(False)
             continue
         entries.append(ref)
 

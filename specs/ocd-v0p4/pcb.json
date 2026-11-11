@@ -815,6 +815,13 @@
       "clearance_mm": 0.3,
       "min_thickness_mm": 0.25,
       "pad_connection": "solid"
+    },
+    {
+      "net": "GND",
+      "layer": "F.Cu",
+      "clearance_mm": 0.3,
+      "min_thickness_mm": 0.25,
+      "pad_connection": "solid"
     }
   ],
   "fabrication": {
