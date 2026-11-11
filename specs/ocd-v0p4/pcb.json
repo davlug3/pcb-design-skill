@@ -549,7 +549,7 @@
         "3": "X2_W"
       },
       "at": {
-        "x_mm": 20.0,
+        "x_mm": 19.0,
         "y_mm": 10.0,
         "rotation_deg": 0.0,
         "side": "front"
@@ -569,7 +569,7 @@
         "3": "TONE_W"
       },
       "at": {
-        "x_mm": 40.0,
+        "x_mm": 34.0,
         "y_mm": 10.0,
         "rotation_deg": 0.0,
         "side": "front"
@@ -589,7 +589,7 @@
         "3": "VOL_TOP"
       },
       "at": {
-        "x_mm": 60.0,
+        "x_mm": 49.0,
         "y_mm": 10.0,
         "rotation_deg": 0.0,
         "side": "front"
@@ -608,6 +608,12 @@
         "S": "GND",
         "R": "BAT_NEG"
       },
+      "at": {
+        "x_mm": 19.0,
+        "y_mm": 29.0,
+        "rotation_deg": 0.0,
+        "side": "front"
+      },
       "properties": {
         "note": "mono plug shorts R to S, completing the battery negative"
       }
@@ -620,6 +626,12 @@
       "pads": {
         "T": "J_OUT_TIP",
         "S": "GND"
+      },
+      "at": {
+        "x_mm": 89.0,
+        "y_mm": 35.0,
+        "rotation_deg": 180.0,
+        "side": "front"
       }
     },
     {
@@ -756,7 +768,9 @@
       "U1",
       "X2",
       "X4",
-      "X5"
+      "X5",
+      "J_IN",
+      "J_OUT"
     ]
   },
   "routing": {
