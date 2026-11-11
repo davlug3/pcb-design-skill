@@ -253,3 +253,40 @@ Use manufacturing sources first for process limits; use semiconductor-vendor app
 - Douglas Brooks, *PCB Currents: How They Flow, How They React*, Prentice Hall, 2013. Current paths, return currents and PCB behavior.
 
 When sources conflict, prefer the most specific and authoritative source for the issue: device datasheet/reference design for that device; chosen manufacturer's current process data for fabrication; applicable standard for compliance; then established technical literature. Do not copy numerical rules from books or articles without checking their assumptions and current supplier capability.
+
+
+### Datasheet-traceable electrical placement constraints
+
+Use exact footprint pad numbers for electrical placement objectives. For each
+`pad_proximity`, `power_loops`, or `pad_paths` rule, include a `source`
+citation identifying the exact device datasheet, application note, reference
+layout, page, section, or figure that justifies the relationship. Missing
+citations produce a semantic-validation warning.
+
+A `power_loops` rule is checked against the component pad-to-net map before
+placement: both endpoints of its supply leg must share one connected net,
+both endpoints of its return leg must share another connected net, and the
+supply and return nets must differ. Invalid pin/net mappings are rejected
+rather than optimized as if they were a valid bypass loop. These checks verify
+declared connectivity and provenance, not the actual current path, inductance,
+copper geometry, or electrical performance.
+
+Example:
+
+```json
+{
+  "placement": {
+    "mode": "auto",
+    "power_loops": [{
+      "supply": [{"ref": "U1", "pad": "3"}, {"ref": "C4", "pad": "1"}],
+      "return": [{"ref": "C4", "pad": "2"}, {"ref": "U1", "pad": "4"}],
+      "weight": 10,
+      "reason": "datasheet-recommended local bypass loop",
+      "source": "https://vendor.example/device-datasheet.pdf, page 18, Figure 27"
+    }]
+  }
+}
+```
+
+Replace the illustrative URL and pad numbers with verified data from the
+selected device and footprint. Do not infer pin numbers from package names.

@@ -87,6 +87,19 @@ def optimize_placement(
                     raise ValueError(f"placement.power_loops references unknown pad {ref}:{pad}")
         if rule["supply"][0] == rule["supply"][1] or rule["return"][0] == rule["return"][1]:
             raise ValueError("placement.power_loops legs must connect two distinct pads")
+        leg_nets: dict[str, str] = {}
+        for leg_name in ("supply", "return"):
+            endpoint_nets = [
+                str(by_ref[endpoint["ref"]][0].get("pads", {}).get(str(endpoint["pad"]), "") or "")
+                for endpoint in rule[leg_name]
+            ]
+            if not endpoint_nets[0] or endpoint_nets[0] != endpoint_nets[1]:
+                raise ValueError(
+                    f"placement.power_loops {leg_name} endpoints must belong to the same connected net"
+                )
+            leg_nets[leg_name] = endpoint_nets[0]
+        if leg_nets["supply"] == leg_nets["return"]:
+            raise ValueError("placement.power_loops supply and return legs must use different nets")
         if float(rule.get("weight", 1.0)) <= 0:
             raise ValueError("placement.power_loops weight must be greater than zero")
     pad_paths = cfg.get("pad_paths", [])

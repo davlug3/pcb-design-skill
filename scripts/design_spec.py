@@ -442,6 +442,81 @@ def validate_spec(spec: dict[str, Any], profile: dict[str, Any]) -> Findings:
             if not math.isnan(x) and kx <= x <= kx + kw and ky <= y <= ky + kh:
                 f.error("components.keepout", f"{ref} is inside keepout {keepout.get('reason', '')!r}")
 
+    # Electrical placement rules must reference real pads and preserve
+    # the declared net topology. These checks catch bad pin mappings before
+    # footprint loading or automatic placement.
+    components_by_ref = {
+        str(comp.get("ref", "")): comp
+        for comp in components if isinstance(comp, dict)
+    }
+
+    def placement_endpoint_net(endpoint: Any, rule_path: str) -> str | None:
+        if not isinstance(endpoint, dict):
+            f.error("placement.pad_endpoint", f"{rule_path} endpoint must be an object")
+            return None
+        ref = str(endpoint.get("ref", ""))
+        pad = str(endpoint.get("pad", ""))
+        component = components_by_ref.get(ref)
+        if component is None:
+            f.error("placement.pad_endpoint", f"{rule_path} references unknown component {ref!r}")
+            return None
+        pads = component.get("pads", {})
+        if pad not in pads:
+            f.error("placement.pad_endpoint", f"{rule_path} references unknown pad {ref}:{pad}")
+            return None
+        net = str(pads.get(pad, "") or "")
+        if not net:
+            f.error("placement.pad_endpoint", f"{rule_path} references unconnected pad {ref}:{pad}")
+            return None
+        return net
+
+    placement_cfg = spec.get("placement", {})
+    for rule_type in ("pad_proximity", "power_loops", "pad_paths"):
+        for index, rule in enumerate(placement_cfg.get(rule_type, [])):
+            if not rule.get("source"):
+                f.warning(
+                    "placement.source",
+                    f"placement.{rule_type}[{index}] has no datasheet/reference-layout source citation",
+                )
+    for index, rule in enumerate(placement_cfg.get("power_loops", [])):
+        legs: dict[str, list[str | None]] = {}
+        for leg_name in ("supply", "return"):
+            endpoints = rule.get(leg_name, [])
+            if len(endpoints) != 2:
+                f.error(
+                    "placement.power_loop_endpoints",
+                    f"placement.power_loops[{index}].{leg_name} must contain exactly two pad endpoints",
+                )
+                legs[leg_name] = []
+                continue
+            legs[leg_name] = [
+                placement_endpoint_net(endpoint, f"placement.power_loops[{index}].{leg_name}")
+                for endpoint in endpoints
+            ]
+            if legs[leg_name][0] is not None and legs[leg_name][1] is not None:
+                if legs[leg_name][0] != legs[leg_name][1]:
+                    f.error(
+                        "placement.power_loop_net",
+                        f"placement.power_loops[{index}].{leg_name} endpoints must belong to the same net",
+                    )
+        if len(legs.get("supply", [])) == 2 and len(legs.get("return", [])) == 2:
+            supply_net, return_net = legs["supply"][0], legs["return"][0]
+            if supply_net is not None and return_net is not None and supply_net == return_net:
+                f.error(
+                    "placement.power_loop_net",
+                    f"placement.power_loops[{index}] supply and return legs must be different nets",
+                )
+    for index, rule in enumerate(placement_cfg.get("pad_proximity", [])):
+        endpoints = rule.get("pads", [])
+        if len(endpoints) != 2:
+            f.error("placement.pad_proximity_endpoints", f"placement.pad_proximity[{index}] must contain exactly two pad endpoints")
+            continue
+        for endpoint in endpoints:
+            placement_endpoint_net(endpoint, f"placement.pad_proximity[{index}]")
+    for index, rule in enumerate(placement_cfg.get("pad_paths", [])):
+        for endpoint in rule.get("pads", []):
+            placement_endpoint_net(endpoint, f"placement.pad_paths[{index}]")
+
     # Stackup and impedance.
     stackup = board.get("stackup")
     gate_stackup = profile.get("gates", {}).get("stackup")

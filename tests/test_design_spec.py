@@ -28,6 +28,38 @@ class SpecValidationTests(unittest.TestCase):
         findings = ds.validate_spec(led_spec(), led_profile())
         self.assertTrue(findings.ok, findings.to_dict())
 
+    def test_power_loop_requires_matching_supply_and_return_nets(self) -> None:
+        spec = led_spec()
+        spec["components"].append({
+            "ref": "U1",
+            "value": "IC",
+            "footprint": "Package_SO:SOIC-8_3.9x4.9mm_P1.27mm",
+            "at": {"x_mm": 10, "y_mm": 10},
+            "pads": {"1": "+5V", "2": "GND"},
+        })
+        spec["placement"]["power_loops"] = [{
+            "supply": [{"ref": "J1", "pad": "1"}, {"ref": "U1", "pad": "1"}],
+            "return": [{"ref": "U1", "pad": "2"}, {"ref": "J1", "pad": "2"}],
+            "weight": 10,
+            "source": "https://example.com/device-datasheet.pdf page 12",
+        }]
+        findings = ds.validate_spec(spec, led_profile())
+        self.assertTrue(findings.ok, findings.to_dict())
+
+        spec["components"][-1]["pads"]["1"] = "GND"
+        findings = ds.validate_spec(spec, led_profile())
+        self.assertFalse(findings.ok)
+        self.assertTrue(any(item["code"] == "placement.power_loop_net" for item in findings.errors))
+
+    def test_electrical_placement_rules_warn_without_source_citation(self) -> None:
+        spec = led_spec()
+        spec["placement"]["pad_paths"] = [{
+            "kind": "crystal_network",
+            "pads": [{"ref": "J1", "pad": "1"}, {"ref": "R1", "pad": "1"}],
+        }]
+        findings = ds.validate_spec(spec, led_profile())
+        self.assertTrue(any(item["code"] == "placement.source" for item in findings.warnings))
+
     def test_via_annular_ring_is_rejected(self) -> None:
         spec = led_spec()
         spec["rules"]["min_via_diameter_mm"] = 0.6

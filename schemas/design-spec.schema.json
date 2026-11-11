@@ -207,7 +207,10 @@
                 }
               },
               "weight": {"type": "number", "exclusiveMinimum": 0, "default": 1.0},
-              "reason": {"type": "string"}
+              "reason": {"type": "string"},
+              "source": {"type": "string", "minLength": 1, "description": "Datasheet/reference-layout citation, preferably URL plus page, section, or figure."},
+              "source": {"type": "string", "minLength": 1, "description": "Datasheet/reference-layout citation, preferably URL plus page, section, or figure."},
+              "source": {"type": "string", "minLength": 1, "description": "Datasheet/reference-layout citation, preferably URL plus page, section, or figure."}
             }
           }
         },
